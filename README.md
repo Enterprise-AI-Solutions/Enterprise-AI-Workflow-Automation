@@ -200,31 +200,49 @@ Step 5: n8n runs via Docker        → Free, already in docker-compose.yml
 ## 🏗 Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│  External Triggers: Gmail · Calendar · Drive · Sheets · Webhooks · Cron  │
-│  Google Apps Script (onEdit · onFormSubmit · time-based · menu clicks)   │
-└──────────────────────────┬───────────────────────────────────────────────┘
-                           │
-┌──────────────────────────▼───────────────────────────────────────────────┐
-│                    FastAPI Backend (port 8000)                            │
-│  /api/v1/health · /workflows · /executions · /ai                          │
-│  /google · /google/sheets · /airtable · /n8n                             │
-└──────────┬──────────────────────────────────────┬────────────────────────┘
-           │                                      │
-    ┌──────▼──────┐                    ┌──────────▼───────────────┐
-    │  SQLite /   │                    │   Claude AI (Anthropic)   │
-    │  PostgreSQL │                    │   chat · classify ·       │
-    └─────────────┘                    │   extract · summarize     │
-                                       └──────────────────────────┘
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        n8n Engine (port 5678)                            │
-│   email_triage · invoice_processing · meeting_scheduler                  │
-└─────────────────────────────────────────────────────────────────────────┘
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    Google Apps Script (apps_script/)                     │
-│   Config.gs · WorkflowAutomation.gs · EmailProcessor.gs                  │
-│   SheetTriggers.gs · InvoiceProcessor.gs                                 │
-└─────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│            External Triggers & Entry Points                                     │
+│  Gmail · Google Calendar · Google Drive · Google Sheets                         │
+│  HTTP Webhooks · Cron Jobs                                                      │
+│  Google Apps Script (apps_script/) — onEdit · onFormSubmit · menu clicks        │
+└─────────────────────────────────┬───────────────────────────────────────────────┘
+                                  │
+┌─────────────────────────────────▼───────────────────────────────────────────────┐
+│                        FastAPI Backend  app/  (port 8000)                       │
+│                                                                                 │
+│  app/routers/          → health · workflows · executions · ai                  │
+│                          google_workspace · google_sheets · airtable · n8n      │
+│                                                                                 │
+│  app/services/ai/      → claude_service.py  (chat · classify · extract)        │
+│  app/services/integrations/ → google_workspace · google_sheets · airtable · n8n│
+│  app/services/workflow/ → workflow_service · execution_service                 │
+│                                                                                 │
+│  app/models/           → workflow · execution · user  (SQLAlchemy ORM)         │
+│  app/templates/        → base.html · dashboard.html  (Jinja2 UI)               │
+│  app/static/           → css/main.css · js/main.js                             │
+│  app/utils/            → logger · helpers · exceptions                         │
+└──────────┬──────────────────────────────────────────┬───────────────────────────┘
+           │                                          │
+    ┌──────▼───────────────┐              ┌───────────▼───────────────────┐
+    │   Database           │              │   Claude AI  (Anthropic)      │
+    │   SQLite (dev)       │              │   chat · classify · extract   │
+    │   PostgreSQL (prod)  │              │   summarize · generate        │
+    │   alembic/ migrations│              └───────────────────────────────┘
+    └──────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────┐
+│  n8n Workflow Engine   n8n/workflows/  (port 5678)                             │
+│  email_triage.json · invoice_processing.json · meeting_scheduler.json          │
+└────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────┐
+│  Google Apps Script   apps_script/                                             │
+│  Config.gs · WorkflowAutomation.gs · EmailProcessor.gs                         │
+│  SheetTriggers.gs · InvoiceProcessor.gs                                        │
+└────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────┐
+│  Deployment                                                                    │
+│  docker/Dockerfile · docker-compose.yml  (app + PostgreSQL + Redis + n8n)      │
+│  Render (free cloud) · GitHub Codespaces (browser dev)                         │
+└────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -234,100 +252,117 @@ Step 5: n8n runs via Docker        → Free, already in docker-compose.yml
 ```
 Enterprise-AI-Workflow-Automation/
 │
-├── app/                              # FastAPI application
-│   ├── main.py                       # App entry point
-│   ├── config.py                     # Pydantic settings
+├── app/                                   # FastAPI application
+│   ├── __init__.py
+│   ├── main.py                            # App entry point & router registration
+│   ├── config.py                          # Pydantic settings (reads from .env)
+│   │
 │   ├── api/
-│   │   └── deps.py                   # Dependency injection
+│   │   └── deps.py                        # Shared dependency injection
+│   │
 │   ├── services/
 │   │   ├── ai/
-│   │   │   └── claude_service.py     # Anthropic / Claude wrapper
+│   │   │   └── claude_service.py          # Anthropic Claude wrapper
 │   │   ├── database/
-│   │   │   ├── session.py            # Async SQLAlchemy engine
-│   │   │   └── base.py               # ORM base + timestamp mixin
+│   │   │   ├── session.py                 # Async SQLAlchemy engine
+│   │   │   └── base.py                    # ORM base + timestamp mixin
 │   │   ├── integrations/
-│   │   │   ├── google_workspace.py   # Gmail, Calendar, Drive
-│   │   │   ├── google_sheets.py      # Google Sheets API v4 ✨
-│   │   │   ├── airtable.py           # Airtable REST API
-│   │   │   └── n8n.py                # n8n webhook & API
+│   │   │   ├── __init__.py
+│   │   │   ├── google_workspace.py        # Gmail, Calendar, Drive
+│   │   │   ├── google_sheets.py           # Google Sheets API v4
+│   │   │   ├── airtable.py                # Airtable REST API
+│   │   │   └── n8n.py                     # n8n webhooks & REST API
 │   │   └── workflow/
-│   │       ├── workflow_service.py   # CRUD + execution logic
-│   │       └── execution_service.py  # Execution history
+│   │       ├── workflow_service.py        # Workflow CRUD + execution logic
+│   │       └── execution_service.py       # Execution history
+│   │
 │   ├── models/
-│   │   ├── workflow.py               # Workflow ORM model
-│   │   ├── execution.py              # WorkflowExecution model
-│   │   └── user.py                   # User model
+│   │   ├── workflow.py                    # Workflow ORM model
+│   │   ├── execution.py                   # WorkflowExecution model
+│   │   └── user.py                        # User model
+│   │
 │   ├── routers/
-│   │   ├── health.py                 # GET /health
-│   │   ├── workflows.py              # Workflow CRUD + execute
-│   │   ├── executions.py             # Execution history
-│   │   ├── ai.py                     # Claude AI endpoints
-│   │   ├── google_workspace.py       # Gmail/Calendar/Drive
-│   │   ├── google_sheets.py          # Sheets CRUD + AI-fill ✨
-│   │   ├── airtable.py               # Airtable CRUD
-│   │   └── n8n.py                    # n8n management
+│   │   ├── health.py                      # GET /api/v1/health
+│   │   ├── workflows.py                   # Workflow CRUD + execute
+│   │   ├── executions.py                  # Execution history & stats
+│   │   ├── ai.py                          # Claude AI endpoints
+│   │   ├── google_workspace.py            # Gmail / Calendar / Drive
+│   │   ├── google_sheets.py               # Sheets CRUD + AI-fill
+│   │   ├── airtable.py                    # Airtable CRUD
+│   │   └── n8n.py                         # n8n management
+│   │
 │   ├── templates/
-│   │   ├── base.html                 # Base layout
-│   │   └── dashboard.html            # Interactive dashboard
+│   │   ├── base.html                      # Base Jinja2 layout
+│   │   └── dashboard.html                 # Interactive web dashboard
+│   │
 │   ├── static/
-│   │   ├── css/main.css              # Dark-mode design system
-│   │   └── js/main.js                # Dashboard JS
+│   │   ├── css/main.css                   # Dark-mode design system
+│   │   └── js/main.js                     # Dashboard JavaScript
+│   │
 │   └── utils/
-│       ├── logger.py                 # Structured logging
-│       ├── helpers.py                # Utilities
-│       └── exceptions.py             # Custom HTTP exceptions
+│       ├── logger.py                      # Structured logging
+│       ├── helpers.py                     # Utility functions
+│       └── exceptions.py                  # Custom HTTP exceptions
 │
-├── apps_script/                      # Google Apps Script ✨
-│   ├── appsscript.json               # OAuth scopes manifest
-│   ├── Config.gs                     # Shared helpers (apiPost, apiGet, toast)
-│   ├── WorkflowAutomation.gs         # ⚡ AI Workflows menu, health check, trigger
-│   ├── EmailProcessor.gs             # Gmail → Sheet triage, classify, summarise
-│   ├── SheetTriggers.gs              # onEdit, onFormSubmit, Calendar sync, AI-fill
-│   ├── InvoiceProcessor.gs           # AI invoice extraction + Airtable sync
-│   └── README.md                     # Apps Script setup guide
+├── apps_script/                           # Google Apps Script (runs inside Sheets)
+│   ├── appsscript.json                    # OAuth scopes manifest
+│   ├── Config.gs                          # Shared helpers: apiPost, apiGet, toast
+│   ├── WorkflowAutomation.gs              # AI Workflows menu + health check
+│   ├── EmailProcessor.gs                  # Gmail → Sheet triage pipeline
+│   ├── SheetTriggers.gs                   # onEdit, onFormSubmit, Calendar sync
+│   ├── InvoiceProcessor.gs                # AI invoice extraction + Airtable sync
+│   └── README.md                          # Setup guide
+│
+├── alembic/                               # Database migrations
+│   └── versions/                          # Migration scripts
 │
 ├── config/
-│   └── logging_config.py             # Logging configuration
+│   └── logging_config.py                  # Logging configuration
+│
+├── docker/
+│   ├── Dockerfile                         # Production image
+│   └── Dockerfile.dev                     # Dev image with hot reload
 │
 ├── docs/
-│   ├── architecture.md               # System architecture
-│   └── deployment.md                 # Deployment guide
+│   ├── architecture.md                    # Detailed system architecture
+│   └── deployment.md                      # Deployment guide
 │
 ├── examples/
-│   ├── gmail_processing/             # Email triage example
-│   ├── invoice_processing/           # Invoice AI extraction
-│   ├── crm/                          # CRM lead scoring
-│   ├── engineering_docs/             # Doc summarisation
-│   └── google_sheets/                # Sheets read/write + AI-fill ✨
-│
-├── tests/
-│   ├── conftest.py                   # Pytest fixtures
-│   ├── test_health.py
-│   ├── test_workflows.py
-│   ├── test_ai.py
-│   ├── test_integrations.py
-│   └── test_google_sheets.py         # 12 Sheets endpoint tests ✨
+│   ├── gmail_processing/                  # Email triage walkthrough
+│   ├── invoice_processing/                # Invoice AI extraction
+│   ├── crm/                               # CRM lead scoring
+│   ├── engineering_docs/                  # Document summarisation
+│   └── google_sheets/                     # Sheets read/write + AI-fill
+│       ├── README.md
+│       ├── ai_fill_payload.json
+│       └── write_payload.json
 │
 ├── n8n/
-│   └── workflows/
+│   └── workflows/                         # Importable n8n workflow JSON files
 │       ├── email_triage.json
 │       ├── invoice_processing.json
 │       └── meeting_scheduler.json
 │
-├── alembic/                          # DB migrations
-├── docker/
-│   ├── Dockerfile                    # Production image
-│   └── Dockerfile.dev                # Dev with hot reload
 ├── scripts/
-│   ├── setup.py                      # One-shot setup
-│   └── seed_data.py                  # Sample data seeder
+│   ├── setup.py                           # One-shot environment setup
+│   └── seed_data.py                       # Sample workflow seeder
 │
-├── .env.example                      # All env vars documented
-├── docker-compose.yml                # Full stack: app+pg+redis+n8n
-├── requirements.txt
-├── requirements-dev.txt
-├── alembic.ini
-├── pytest.ini
+├── tests/
+│   ├── conftest.py                        # Pytest fixtures (async client, DB)
+│   ├── test_health.py
+│   ├── test_workflows.py
+│   ├── test_ai.py
+│   ├── test_integrations.py
+│   └── test_google_sheets.py
+│
+├── .env.example                           # All environment variables documented
+├── .gitignore
+├── alembic.ini                            # Alembic migration config
+├── docker-compose.yml                     # Full stack: app + PostgreSQL + Redis + n8n
+├── pytest.ini                             # Pytest configuration
+├── requirements.txt                       # Production dependencies
+├── requirements-dev.txt                   # Dev/test dependencies
+├── LICENSE
 └── README.md
 ```
 

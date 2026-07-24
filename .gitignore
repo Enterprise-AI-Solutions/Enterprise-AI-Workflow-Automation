@@ -69,10 +69,8 @@ build/
 MANIFEST
 
 # ── IDEs ──────────────────────────────────────────────────────────────────────
-# VSCode — keep .vscode/extensions.json but ignore local settings
-.vscode/settings.json
-.vscode/launch.json
-.vscode/tasks.json
+# VSCode — ignore entire folder (use extensions.json in docs/ if you want to share)
+.vscode/
 
 # PyCharm / IntelliJ
 .idea/
