@@ -1,0 +1,21 @@
+# ── PostgreSQL Dependencies ───────────────────────────────────────────────────
+# Install ONLY if you are connecting to a real PostgreSQL database.
+#
+# Pre-requisites on Windows:
+#   1. Install PostgreSQL: https://www.postgresql.org/download/windows/
+#      (this provides pg_config, required to build psycopg2-binary from source)
+#   OR install just the client tools:
+#      winget install PostgreSQL.PostgreSQL
+#
+# Pre-requisites on macOS:
+#   brew install postgresql
+#
+# Pre-requisites on Linux (Ubuntu/Debian):
+#   sudo apt-get install libpq-dev python3-dev
+#
+# Then install:
+#   pip install -r requirements-postgres.txt
+# ──────────────────────────────────────────────────────────────────────────────
+
+asyncpg==0.30.0          # Async PostgreSQL driver for FastAPI / SQLAlchemy
+psycopg2-binary==2.9.10  # Sync driver required for Alembic migrations

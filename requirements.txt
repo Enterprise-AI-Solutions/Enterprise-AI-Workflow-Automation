@@ -5,11 +5,18 @@ pydantic==2.10.3
 pydantic-settings==2.6.1
 
 # ── Database ──────────────────────────────────────────────────────────────────
+# SQLite driver — zero-config, used by default for local development
 sqlalchemy==2.0.36
 aiosqlite==0.20.0
-asyncpg==0.30.0           # PostgreSQL async driver (production)
 alembic==1.14.0
-psycopg2-binary==2.9.10   # Alembic sync migrations (PostgreSQL only)
+
+# PostgreSQL drivers — only needed if DATABASE_URL points to PostgreSQL.
+# Install separately with: pip install -r requirements-postgres.txt
+# asyncpg==0.30.0          # async driver (FastAPI / SQLAlchemy)
+# psycopg2-binary==2.9.10  # sync driver (Alembic migrations)
+#
+# NOTE: psycopg2-binary requires PostgreSQL dev tools (pg_config) on Windows.
+# If you don't have PostgreSQL installed locally, leave these commented out.
 
 # ── HTTP Client ───────────────────────────────────────────────────────────────
 httpx==0.27.2
@@ -38,4 +45,4 @@ python-json-logger==2.0.7
 # ── Testing ───────────────────────────────────────────────────────────────────
 pytest==8.3.4
 pytest-asyncio==0.24.0
-# httpx is already listed above — used for both HTTP client and async test client
+# httpx listed above — doubles as async test client
