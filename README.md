@@ -252,6 +252,9 @@ Step 5: n8n runs via Docker        → Free, already in docker-compose.yml
 ```
 Enterprise-AI-Workflow-Automation/
 │
+├── alembic/                               # Database migrations
+│   └── versions/                          # Migration scripts
+│
 ├── app/                                   # FastAPI application
 │   ├── __init__.py
 │   ├── main.py                            # App entry point & router registration
@@ -260,61 +263,58 @@ Enterprise-AI-Workflow-Automation/
 │   ├── api/
 │   │   └── deps.py                        # Shared dependency injection
 │   │
+│   ├── models/
+│   │   ├── execution.py                   # WorkflowExecution ORM model
+│   │   ├── user.py                        # User model
+│   │   └── workflow.py                    # Workflow ORM model
+│   │
+│   ├── routers/
+│   │   ├── ai.py                          # Claude AI endpoints
+│   │   ├── airtable.py                    # Airtable CRUD
+│   │   ├── executions.py                  # Execution history & stats
+│   │   ├── google_sheets.py               # Sheets CRUD + AI-fill
+│   │   ├── google_workspace.py            # Gmail / Calendar / Drive
+│   │   ├── health.py                      # GET /api/v1/health
+│   │   ├── n8n.py                         # n8n management
+│   │   └── workflows.py                   # Workflow CRUD + execute
+│   │
 │   ├── services/
 │   │   ├── ai/
 │   │   │   └── claude_service.py          # Anthropic Claude wrapper
 │   │   ├── database/
-│   │   │   ├── session.py                 # Async SQLAlchemy engine
-│   │   │   └── base.py                    # ORM base + timestamp mixin
+│   │   │   ├── base.py                    # ORM base + timestamp mixin
+│   │   │   └── session.py                 # Async SQLAlchemy engine
 │   │   ├── integrations/
 │   │   │   ├── __init__.py
-│   │   │   ├── google_workspace.py        # Gmail, Calendar, Drive
-│   │   │   ├── google_sheets.py           # Google Sheets API v4
 │   │   │   ├── airtable.py                # Airtable REST API
+│   │   │   ├── google_sheets.py           # Google Sheets API v4
+│   │   │   ├── google_workspace.py        # Gmail, Calendar, Drive
 │   │   │   └── n8n.py                     # n8n webhooks & REST API
 │   │   └── workflow/
-│   │       ├── workflow_service.py        # Workflow CRUD + execution logic
-│   │       └── execution_service.py       # Execution history
-│   │
-│   ├── models/
-│   │   ├── workflow.py                    # Workflow ORM model
-│   │   ├── execution.py                   # WorkflowExecution model
-│   │   └── user.py                        # User model
-│   │
-│   ├── routers/
-│   │   ├── health.py                      # GET /api/v1/health
-│   │   ├── workflows.py                   # Workflow CRUD + execute
-│   │   ├── executions.py                  # Execution history & stats
-│   │   ├── ai.py                          # Claude AI endpoints
-│   │   ├── google_workspace.py            # Gmail / Calendar / Drive
-│   │   ├── google_sheets.py               # Sheets CRUD + AI-fill
-│   │   ├── airtable.py                    # Airtable CRUD
-│   │   └── n8n.py                         # n8n management
-│   │
-│   ├── templates/
-│   │   ├── base.html                      # Base Jinja2 layout
-│   │   └── dashboard.html                 # Interactive web dashboard
+│   │       ├── execution_service.py       # Execution history
+│   │       └── workflow_service.py        # Workflow CRUD + execution logic
 │   │
 │   ├── static/
 │   │   ├── css/main.css                   # Dark-mode design system
 │   │   └── js/main.js                     # Dashboard JavaScript
 │   │
+│   ├── templates/
+│   │   ├── base.html                      # Base Jinja2 layout
+│   │   └── dashboard.html                 # Interactive web dashboard
+│   │
 │   └── utils/
-│       ├── logger.py                      # Structured logging
+│       ├── exceptions.py                  # Custom HTTP exceptions
 │       ├── helpers.py                     # Utility functions
-│       └── exceptions.py                  # Custom HTTP exceptions
+│       └── logger.py                      # Structured logging
 │
 ├── apps_script/                           # Google Apps Script (runs inside Sheets)
 │   ├── appsscript.json                    # OAuth scopes manifest
 │   ├── Config.gs                          # Shared helpers: apiPost, apiGet, toast
-│   ├── WorkflowAutomation.gs              # AI Workflows menu + health check
 │   ├── EmailProcessor.gs                  # Gmail → Sheet triage pipeline
-│   ├── SheetTriggers.gs                   # onEdit, onFormSubmit, Calendar sync
 │   ├── InvoiceProcessor.gs                # AI invoice extraction + Airtable sync
-│   └── README.md                          # Setup guide
-│
-├── alembic/                               # Database migrations
-│   └── versions/                          # Migration scripts
+│   ├── README.md                          # Setup guide
+│   ├── SheetTriggers.gs                   # onEdit, onFormSubmit, Calendar sync
+│   └── WorkflowAutomation.gs              # AI Workflows menu + health check
 │
 ├── config/
 │   └── logging_config.py                  # Logging configuration
@@ -328,14 +328,14 @@ Enterprise-AI-Workflow-Automation/
 │   └── deployment.md                      # Deployment guide
 │
 ├── examples/
-│   ├── gmail_processing/                  # Email triage walkthrough
-│   ├── invoice_processing/                # Invoice AI extraction
 │   ├── crm/                               # CRM lead scoring
 │   ├── engineering_docs/                  # Document summarisation
-│   └── google_sheets/                     # Sheets read/write + AI-fill
-│       ├── README.md
-│       ├── ai_fill_payload.json
-│       └── write_payload.json
+│   ├── gmail_processing/                  # Email triage walkthrough
+│   ├── google_sheets/                     # Sheets read/write + AI-fill
+│   │   ├── ai_fill_payload.json
+│   │   ├── README.md
+│   │   └── write_payload.json
+│   └── invoice_processing/                # Invoice AI extraction
 │
 ├── n8n/
 │   └── workflows/                         # Importable n8n workflow JSON files
@@ -344,26 +344,26 @@ Enterprise-AI-Workflow-Automation/
 │       └── meeting_scheduler.json
 │
 ├── scripts/
-│   ├── setup.py                           # One-shot environment setup
-│   └── seed_data.py                       # Sample workflow seeder
+│   ├── seed_data.py                       # Sample workflow seeder
+│   └── setup.py                           # One-shot environment setup
 │
 ├── tests/
 │   ├── conftest.py                        # Pytest fixtures (async client, DB)
-│   ├── test_health.py
-│   ├── test_workflows.py
 │   ├── test_ai.py
+│   ├── test_google_sheets.py
+│   ├── test_health.py
 │   ├── test_integrations.py
-│   └── test_google_sheets.py
+│   └── test_workflows.py
 │
 ├── .env.example                           # All environment variables documented
 ├── .gitignore
 ├── alembic.ini                            # Alembic migration config
 ├── docker-compose.yml                     # Full stack: app + PostgreSQL + Redis + n8n
-├── pytest.ini                             # Pytest configuration
-├── requirements.txt                       # Production dependencies
-├── requirements-dev.txt                   # Dev/test dependencies
 ├── LICENSE
-└── README.md
+├── pytest.ini                             # Pytest configuration
+├── README.md
+├── requirements-dev.txt                   # Dev/test dependencies
+└── requirements.txt                       # Production dependencies
 ```
 
 ---
