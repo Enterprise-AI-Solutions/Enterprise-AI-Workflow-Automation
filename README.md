@@ -74,7 +74,7 @@ No formulas. No manual typing. Done in seconds.
 
 ---
 
-### What Each Tool Does (Plain English)
+### What Each Tool Does
 
 | Tool | What it is | Why we use it |
 |---|---|---|
@@ -557,7 +557,7 @@ pytest tests/ -v
 
 ---
 
-### Option 4 — GitHub Codespaces (Runs Entirely in Your Browser)
+### Option 4 — GitHub Codespaces
 
 No Python installation, no Docker, no local setup. GitHub spins up a full cloud environment with VSCode built into your browser.
 
@@ -757,7 +757,7 @@ Import these from `n8n/workflows/` via the n8n UI (Settings → Import Workflow)
 
 ## 🤝 Contributing
 
-1. Fork the repository
+1. Fork this repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
 3. Make changes and add tests
 4. Run `pytest` and `ruff check .`
