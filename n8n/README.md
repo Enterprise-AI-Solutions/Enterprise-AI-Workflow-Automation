@@ -14,16 +14,17 @@ This folder contains **6 production-ready n8n workflow JSON files** that integra
 
 ---
 
-## The 6 Workflows
+## The 7 Workflows
 
-| # | File | Trigger | What It Does |
-|---|---|---|---|
-| 1 | [`email_triage.json`](workflows/email_triage.json) | Webhook (Gmail) | Claude classifies incoming email → routes Sales leads to Airtable CRM → auto-replies |
-| 2 | [`invoice_processing.json`](workflows/invoice_processing.json) | HTTP Webhook | Claude extracts invoice fields (vendor, amount, date) → logs to Airtable → Gmail notification |
-| 3 | [`meeting_scheduler.json`](workflows/meeting_scheduler.json) | HTTP Webhook | Claude extracts meeting details from natural language → creates Google Calendar event → Gmail confirmation |
-| 4 | [`lead_qualification.json`](workflows/lead_qualification.json) | Webhook | Claude extracts + scores lead quality → logs enriched record to Airtable → alerts sales team on hot leads |
-| 5 | [`daily_kpi_report.json`](workflows/daily_kpi_report.json) | Schedule (08:00 daily) | Pulls Airtable + API stats → Claude writes executive summary → logs to Google Sheets + emails stakeholders |
-| 6 | [`support_ticket_auto_responder.json`](workflows/support_ticket_auto_responder.json) | Webhook | Claude classifies ticket + drafts reply → logs to Airtable → sends AI-drafted reply → escalates urgent tickets |
+| # | File | Trigger | AI Step | Actions |
+|---|---|---|---|---|
+| 1 | [`email_triage.json`](workflows/email_triage.json) | Webhook (Gmail) | Claude classify | Airtable + auto-reply |
+| 2 | [`invoice_processing.json`](workflows/invoice_processing.json) | HTTP Webhook | Claude extract | Airtable log + Gmail notify |
+| 3 | [`meeting_scheduler.json`](workflows/meeting_scheduler.json) | HTTP Webhook | Claude extract | Calendar create + Gmail confirm |
+| 4 | [`lead_qualification.json`](workflows/lead_qualification.json) | Webhook | Claude extract + score | Airtable CRM + Gmail sales alert |
+| 5 | [`daily_kpi_report.json`](workflows/daily_kpi_report.json) | Schedule (08:00 daily) | Claude summarize | Google Sheets log + Gmail report |
+| 6 | [`support_ticket_auto_responder.json`](workflows/support_ticket_auto_responder.json) | HTTP webhook | Claude classify + draft | Airtable log + Gmail reply + escalation |
+| 7 | [`sap_maintenance_ai_alert.json`](workflows/sap_maintenance_ai_alert.json) | Schedule (every 4h) | Claude PM analysis | Rich HTML email alert + Airtable log |
 
 ---
 
@@ -59,12 +60,16 @@ Set these in your `.env` file (see [`.env.example`](../.env.example)) **and** in
 | `GOOGLE_CLIENT_ID` | Gmail / Sheets / Calendar | Google OAuth 2.0 client ID |
 | `GOOGLE_CLIENT_SECRET` | Gmail / Sheets / Calendar | Google OAuth 2.0 client secret |
 | `N8N_API_KEY` | Backend → n8n | n8n API key for `/api/v1/n8n/*` endpoints |
-| `N8N_BASE_URL` | Backend → n8n | Your n8n instance URL (e.g. `https://yourorg.app.n8n.cloud`) |
+| `SAP_API_HUB_KEY` | `sap_maintenance_ai_alert` | SAP API Business Hub key — get free from [api.sap.com](https://api.sap.com) |
+| `SAP_BASE_URL` | `sap_maintenance_ai_alert` | SAP S/4HANA base URL (sandbox: `https://sandbox.api.sap.com/s4hanacloud`) |
+| `MAINTENANCE_ALERT_EMAIL` | `sap_maintenance_ai_alert` | Email to receive maintenance alerts (maintenance team) |
+| `MAINTENANCE_MANAGER_EMAIL` | `sap_maintenance_ai_alert` | CC email for maintenance manager |
 | `SALES_TEAM_EMAIL` | `lead_qualification` | Email address to alert on hot leads |
 | `STAKEHOLDER_EMAILS` | `daily_kpi_report` | Comma-separated emails for daily KPI report |
 | `SUPPORT_ESCALATION_EMAIL` | `support_ticket_auto_responder` | Email to escalate urgent tickets to |
 | `KPI_SHEET_ID` | `daily_kpi_report` | Google Sheets ID for KPI log |
 | `KPI_SHEET_URL` | `daily_kpi_report` | Public URL of the KPI Google Sheet |
+| `N8N_BASE_URL` | Backend → n8n | Your n8n instance URL (e.g. `https://yourorg.app.n8n.cloud`) |
 
 ---
 
@@ -133,6 +138,40 @@ HTTP Webhook
         → [Yes] Airtable Log + Gmail to Customer + Gmail Escalation
         → [No]  Airtable Log + Gmail to Customer
 ```
+
+---
+
+### 7. SAP Maintenance AI Alert (`sap_maintenance_ai_alert.json`)
+**Trigger:** Schedule — every 4 hours
+
+```
+Schedule Trigger (every 4h)
+    → SAP OData API → GET API_MAINTORDER_0001/MaintenanceOrder
+      ($filter=MaintPriority eq '1' or MaintPriority eq '2')   ← IW38 equivalent
+    → Check: Any high-priority orders found?
+        → [Yes]
+            Code Node — Format orders + build HTML table
+                → Claude AI — Analyse as Plant Maintenance expert
+                    ├── Gmail — Send rich HTML alert email
+                    │     (🚨 URGENT if P1, ⚠️ ALERT if P2 only)
+                    └── Airtable — Log alert to SAP_Maintenance_Alerts table
+        → [No] → Silent end (no email sent)
+```
+
+**SAP Priority Mapping:**
+| SAP `MaintPriority` | Label | Email Subject |
+|---|---|---|
+| `1` | 🔴 Very High | 🚨 URGENT |
+| `2` | 🟠 High | ⚠️ ALERT |
+
+**SAP API Used:** `API_MAINTORDER_0001` (S/4HANA Plant Maintenance OData API)
+- Sandbox: `https://sandbox.api.sap.com/s4hanacloud/sap/opu/odata/sap/API_MAINTORDER_0001/`
+- Get a free SAP API Hub key at [api.sap.com](https://api.sap.com)
+
+**Key Fields Extracted from SAP:**
+`MaintenanceOrder`, `MaintPriority`, `MaintOrderDesc`, `MaintPlant`, `FunctionalLocation`,
+`Equipment`, `MainWorkCenter`, `BasicStartDate`, `BasicFinishDate`, `MaintOrdPersonResponsible`,
+`MaintOrderSystemStatus`
 
 ---
 

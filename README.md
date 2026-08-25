@@ -756,6 +756,7 @@ See [`n8n/README.md`](n8n/README.md) for full setup instructions.
 | 4 | `lead_qualification.json` | HTTP webhook | Claude extract + score | Airtable CRM + Gmail sales alert |
 | 5 | `daily_kpi_report.json` | Schedule (08:00) | Claude summarize | Google Sheets log + Gmail report |
 | 6 | `support_ticket_auto_responder.json` | HTTP webhook | Claude classify + draft | Airtable log + Gmail reply + escalation |
+| 7 | `sap_maintenance_ai_alert.json` | Schedule (every 4h) | Claude PM expert analysis | Rich HTML alert email + Airtable log |
 
 
 ---
