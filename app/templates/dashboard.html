@@ -148,6 +148,90 @@
         </div>
     </section>
 
+    <!-- n8n Execution Results Dashboard -->
+    <section class="section" id="n8n-dashboard">
+        <div class="section-header">
+            <h2 class="section-title">⚡ n8n Workflow Execution Results</h2>
+            <div style="display:flex;gap:10px;align-items:center">
+                <span id="n8n-live-badge" class="n8n-live-badge">● LIVE</span>
+                <button class="btn btn-ghost btn-sm" onclick="loadN8nDashboard()">Refresh ↻</button>
+            </div>
+        </div>
+
+        <!-- Execution KPI Bar -->
+        <div class="n8n-kpi-bar" id="n8n-kpi-bar">
+            <div class="n8n-kpi-card" id="kpi-total">
+                <div class="n8n-kpi-icon">⚡</div>
+                <div class="n8n-kpi-value" id="kpi-total-val">—</div>
+                <div class="n8n-kpi-label">Total Executions</div>
+            </div>
+            <div class="n8n-kpi-card success" id="kpi-success">
+                <div class="n8n-kpi-icon">✅</div>
+                <div class="n8n-kpi-value" id="kpi-success-val">—</div>
+                <div class="n8n-kpi-label">Succeeded</div>
+            </div>
+            <div class="n8n-kpi-card error" id="kpi-error">
+                <div class="n8n-kpi-icon">❌</div>
+                <div class="n8n-kpi-value" id="kpi-error-val">—</div>
+                <div class="n8n-kpi-label">Failed</div>
+            </div>
+            <div class="n8n-kpi-card running" id="kpi-running">
+                <div class="n8n-kpi-icon">🔄</div>
+                <div class="n8n-kpi-value" id="kpi-running-val">—</div>
+                <div class="n8n-kpi-label">Running</div>
+            </div>
+            <div class="n8n-kpi-card rate" id="kpi-rate">
+                <div class="n8n-kpi-icon">📈</div>
+                <div class="n8n-kpi-value" id="kpi-rate-val">—</div>
+                <div class="n8n-kpi-label">Success Rate</div>
+            </div>
+            <div class="n8n-kpi-card duration" id="kpi-duration">
+                <div class="n8n-kpi-icon">⏱️</div>
+                <div class="n8n-kpi-value" id="kpi-duration-val">—</div>
+                <div class="n8n-kpi-label">Avg Duration</div>
+            </div>
+        </div>
+
+        <!-- Per-Workflow Breakdown -->
+        <div id="n8n-workflow-breakdown" style="margin-bottom:20px"></div>
+
+        <!-- Filters -->
+        <div class="n8n-filters">
+            <select id="filter-workflow" class="form-select n8n-filter-select" onchange="applyN8nFilter()">
+                <option value="">All Workflows</option>
+                <option value="1">📧 Email Triage</option>
+                <option value="2">🧾 Invoice Processing</option>
+                <option value="3">📅 Meeting Scheduler</option>
+                <option value="4">🎯 Lead Qualification</option>
+                <option value="5">📊 Daily KPI Report</option>
+                <option value="6">🎫 Support Ticket Auto-Responder</option>
+                <option value="7">🏭 SAP Maintenance AI Alert</option>
+            </select>
+            <select id="filter-status" class="form-select n8n-filter-select" onchange="applyN8nFilter()">
+                <option value="">All Statuses</option>
+                <option value="success">✅ Success</option>
+                <option value="error">❌ Failed</option>
+                <option value="running">🔄 Running</option>
+            </select>
+            <span id="n8n-count-label" style="font-size:13px;color:var(--text-muted);align-self:center"></span>
+            <span id="n8n-demo-badge" style="display:none" class="int-badge badge-demo">Demo Mode</span>
+        </div>
+
+        <!-- Executions Table -->
+        <div class="table-container" id="n8n-executions-table">
+            <div class="loading-state">Loading n8n execution history...</div>
+        </div>
+
+        <!-- Execution Detail Panel -->
+        <div id="n8n-detail-panel" class="n8n-detail-panel" style="display:none">
+            <div class="n8n-detail-header">
+                <strong id="n8n-detail-title">Execution Detail</strong>
+                <button class="btn btn-ghost btn-sm" onclick="closeN8nDetail()">✕ Close</button>
+            </div>
+            <pre id="n8n-detail-body" class="n8n-detail-body"></pre>
+        </div>
+    </section>
+
     <!-- API Endpoints Reference -->
     <section class="section">
         <h2 class="section-title">API Endpoints</h2>
@@ -169,6 +253,14 @@
                 <div class="endpoint-item"><span class="method post">POST</span><code>/api/v1/ai/generate-workflow</code></div>
             </div>
             <div class="endpoint-group">
+                <div class="endpoint-group-title">⚡ n8n Executions</div>
+                <div class="endpoint-item"><span class="method get">GET</span><code>/api/v1/n8n/workflows</code></div>
+                <div class="endpoint-item"><span class="method get">GET</span><code>/api/v1/n8n/executions</code></div>
+                <div class="endpoint-item"><span class="method get">GET</span><code>/api/v1/n8n/executions/stats</code></div>
+                <div class="endpoint-item"><span class="method get">GET</span><code>/api/v1/n8n/workflows/{id}/executions</code></div>
+                <div class="endpoint-item"><span class="method post">POST</span><code>/api/v1/n8n/trigger</code></div>
+            </div>
+            <div class="endpoint-group">
                 <div class="endpoint-group-title">📧 Google Workspace</div>
                 <div class="endpoint-item"><span class="method get">GET</span><code>/api/v1/google/gmail/messages</code></div>
                 <div class="endpoint-item"><span class="method post">POST</span><code>/api/v1/google/gmail/send</code></div>
@@ -186,6 +278,7 @@
     </section>
 
 </div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -360,9 +453,186 @@ function intName(key) {
     return {claude_ai:'Claude AI', google_workspace:'Google Workspace', airtable:'Airtable', n8n:'n8n'}[key] || key;
 }
 
+// ── n8n Execution Dashboard ──────────────────────────────────────────────────
+
+let _n8nAllExecutions = [];   // cache for client-side filter
+let _n8nRefreshTimer = null;
+
+async function loadN8nDashboard() {
+    // Pulse the LIVE badge
+    const badge = document.getElementById('n8n-live-badge');
+    badge.classList.add('pulsing');
+
+    try {
+        const [statsRes, execRes] = await Promise.all([
+            fetch(`${API}/n8n/executions/stats`),
+            fetch(`${API}/n8n/executions?limit=50`)
+        ]);
+        const stats  = await statsRes.json();
+        const execData = await execRes.json();
+
+        // KPI bar
+        document.getElementById('kpi-total-val').textContent    = stats.total ?? '—';
+        document.getElementById('kpi-success-val').textContent  = stats.by_status?.success ?? '—';
+        document.getElementById('kpi-error-val').textContent    = stats.by_status?.error ?? '—';
+        document.getElementById('kpi-running-val').textContent  = stats.by_status?.running ?? '—';
+        document.getElementById('kpi-rate-val').textContent     = `${stats.success_rate_pct ?? '—'}%`;
+        document.getElementById('kpi-duration-val').textContent = stats.avg_duration_seconds
+            ? `${stats.avg_duration_seconds}s` : '—';
+
+        // Demo badge
+        if (execData.demo_mode) {
+            document.getElementById('n8n-demo-badge').style.display = 'inline-flex';
+        }
+
+        // Per-workflow breakdown cards
+        if (stats.by_workflow?.length) {
+            const bw = document.getElementById('n8n-workflow-breakdown');
+            bw.innerHTML = `
+                <div class="n8n-wf-breakdown">
+                    ${stats.by_workflow.map(w => `
+                        <div class="n8n-wf-card" onclick="filterByWorkflowName('${w.name.replace(/'/g,"\\'")}')">
+                            <div class="n8n-wf-name">${w.name}</div>
+                            <div class="n8n-wf-stats">
+                                <span class="wf-stat-success">✅ ${w.success}</span>
+                                <span class="wf-stat-error">❌ ${w.error}</span>
+                                <span class="wf-stat-total">⚡ ${w.total}</span>
+                            </div>
+                            <div class="n8n-wf-bar">
+                                <div class="n8n-wf-bar-fill" style="width:${w.success_rate_pct}%"></div>
+                            </div>
+                            <div class="n8n-wf-rate">${w.success_rate_pct}% success</div>
+                        </div>
+                    `).join('')}
+                </div>`;
+        }
+
+        // Store and render executions
+        _n8nAllExecutions = execData.executions || [];
+        renderN8nTable(_n8nAllExecutions);
+
+    } catch(e) {
+        document.getElementById('n8n-executions-table').innerHTML =
+            `<div class="error-state">⚠️ Failed to load n8n executions: ${e.message}</div>`;
+    } finally {
+        setTimeout(() => badge.classList.remove('pulsing'), 800);
+    }
+}
+
+function renderN8nTable(executions) {
+    const container = document.getElementById('n8n-executions-table');
+    document.getElementById('n8n-count-label').textContent =
+        `Showing ${executions.length} execution${executions.length !== 1 ? 's' : ''}`;
+
+    if (!executions.length) {
+        container.innerHTML = `<div class="empty-state">No executions found for the selected filters.</div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <table class="data-table n8n-exec-table">
+            <thead><tr>
+                <th>Workflow</th>
+                <th>Status</th>
+                <th>Mode</th>
+                <th>Started</th>
+                <th>Duration</th>
+                <th>Output / Error</th>
+                <th>Detail</th>
+            </tr></thead>
+            <tbody>
+            ${executions.map(ex => {
+                const statusClass = {success:'status-active',error:'status-failed',running:'status-running'}[ex.status] || '';
+                const statusEmoji = {success:'✅',error:'❌',running:'🔄'}[ex.status] || '⚪';
+                const started = ex.startedAt ? new Date(ex.startedAt) : null;
+                const timeAgo = started ? relativeTime(started) : '—';
+                const fullTime = started ? started.toLocaleString() : '—';
+                const dur = ex.duration_seconds ? `${ex.duration_seconds}s` : ex.status === 'running' ? '⏳ running' : '—';
+                const outputSnippet = ex.error
+                    ? `<span style="color:#ef4444;font-size:12px" title="${ex.error}">⚠️ ${ex.error.substring(0,50)}${ex.error.length>50?'…':''}</span>`
+                    : ex.output
+                        ? `<span style="color:#10b981;font-size:12px">${JSON.stringify(ex.output).substring(0,60)}${JSON.stringify(ex.output).length>60?'…':''}</span>`
+                        : '<span style="color:var(--text-muted);font-size:12px">—</span>';
+                return `
+                    <tr class="n8n-exec-row ${ex.status === 'running' ? 'exec-running' : ''}"
+                        title="Execution #${ex.id}">
+                        <td>
+                            <span class="wf-emoji">${ex.workflowEmoji || '⚡'}</span>
+                            <strong>${ex.workflowName}</strong>
+                        </td>
+                        <td><span class="status-badge ${statusClass}">${statusEmoji} ${ex.status}</span></td>
+                        <td><code style="font-size:11px">${ex.mode}</code></td>
+                        <td title="${fullTime}">${timeAgo}</td>
+                        <td>${dur}</td>
+                        <td>${outputSnippet}</td>
+                        <td>
+                            <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px"
+                                onclick="showN8nDetail(event, ${JSON.stringify(ex).replace(/"/g,'&quot;')})">
+                                View →
+                            </button>
+                        </td>
+                    </tr>`;
+            }).join('')}
+            </tbody>
+        </table>`;
+}
+
+function applyN8nFilter() {
+    const wfId   = document.getElementById('filter-workflow').value;
+    const status = document.getElementById('filter-status').value;
+    let filtered = _n8nAllExecutions;
+    if (wfId)   filtered = filtered.filter(e => e.workflowId === wfId);
+    if (status) filtered = filtered.filter(e => e.status === status);
+    renderN8nTable(filtered);
+}
+
+function filterByWorkflowName(name) {
+    // Find the matching workflowId from cache
+    const exec = _n8nAllExecutions.find(e => e.workflowName === name);
+    if (exec) {
+        const sel = document.getElementById('filter-workflow');
+        sel.value = exec.workflowId;
+        applyN8nFilter();
+        document.getElementById('n8n-dashboard').scrollIntoView({behavior:'smooth'});
+    }
+}
+
+function showN8nDetail(event, ex) {
+    event.stopPropagation();
+    const panel = document.getElementById('n8n-detail-panel');
+    const title = document.getElementById('n8n-detail-title');
+    const body  = document.getElementById('n8n-detail-body');
+    title.textContent = `${ex.workflowEmoji} ${ex.workflowName} — Execution #${ex.id}`;
+    body.textContent  = JSON.stringify(ex, null, 2);
+    panel.style.display = 'block';
+    panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function closeN8nDetail() {
+    document.getElementById('n8n-detail-panel').style.display = 'none';
+}
+
+function relativeTime(date) {
+    const diff = Math.floor((Date.now() - date) / 1000);
+    if (diff < 60)    return `${diff}s ago`;
+    if (diff < 3600)  return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return `${Math.floor(diff/86400)}d ago`;
+}
+
+// Auto-refresh n8n dashboard every 30 seconds
+function startN8nAutoRefresh() {
+    if (_n8nRefreshTimer) clearInterval(_n8nRefreshTimer);
+    _n8nRefreshTimer = setInterval(() => {
+        loadN8nDashboard();
+    }, 30000);
+}
+
 // Init
 loadHealth();
 loadStats();
 loadWorkflows();
+loadN8nDashboard();
+startN8nAutoRefresh();
 </script>
 {% endblock %}
