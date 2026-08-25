@@ -1,0 +1,175 @@
+{
+  "name": "Lead Qualification & CRM Enrichment",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-qualification",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node_webhook_lead",
+      "name": "Webhook — New Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://app:8000/api/v1/ai/extract",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $json.body.message }}"
+            },
+            {
+              "name": "fields",
+              "value": ["company_name", "company_size", "industry", "use_case", "budget_range", "urgency"]
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_claude_extract",
+      "name": "Claude — Extract Lead Fields",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://app:8000/api/v1/ai/classify",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $json.body.message }}"
+            },
+            {
+              "name": "categories",
+              "value": ["Hot Lead", "Warm Lead", "Cold Lead", "Not a Fit"]
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_claude_score",
+      "name": "Claude — Score Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [300, 460]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('Claude — Score Lead').item.json.category }}",
+              "operation": "equals",
+              "value2": "Hot Lead"
+            }
+          ]
+        }
+      },
+      "id": "node_route_hot",
+      "name": "Route — Hot Lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [540, 380]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://app:8000/api/v1/airtable/bases/{{ $env.AIRTABLE_BASE_ID }}/tables/Leads/records",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": {
+                "Source": "n8n-webhook",
+                "Company": "={{ $('Claude — Extract Lead Fields').item.json.company_name }}",
+                "Industry": "={{ $('Claude — Extract Lead Fields').item.json.industry }}",
+                "Company Size": "={{ $('Claude — Extract Lead Fields').item.json.company_size }}",
+                "Use Case": "={{ $('Claude — Extract Lead Fields').item.json.use_case }}",
+                "Budget": "={{ $('Claude — Extract Lead Fields').item.json.budget_range }}",
+                "Score": "={{ $('Claude — Score Lead').item.json.category }}",
+                "Urgency": "={{ $('Claude — Extract Lead Fields').item.json.urgency }}",
+                "Status": "New",
+                "Created": "={{ $now }}"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_airtable_crm",
+      "name": "Airtable — Log to CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [760, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://app:8000/api/v1/google/gmail/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "to",
+              "value": "={{ $env.SALES_TEAM_EMAIL }}"
+            },
+            {
+              "name": "subject",
+              "value": "🔥 Hot Lead: {{ $('Claude — Extract Lead Fields').item.json.company_name }}"
+            },
+            {
+              "name": "body",
+              "value": "A hot lead just came in!\n\nCompany: {{ $('Claude — Extract Lead Fields').item.json.company_name }}\nIndustry: {{ $('Claude — Extract Lead Fields').item.json.industry }}\nBudget: {{ $('Claude — Extract Lead Fields').item.json.budget_range }}\nUse Case: {{ $('Claude — Extract Lead Fields').item.json.use_case }}\n\nCheck Airtable for full details."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node_gmail_alert",
+      "name": "Gmail — Alert Sales Team",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [760, 440]
+    }
+  ],
+  "connections": {
+    "Webhook — New Lead": {
+      "main": [
+        [
+          { "node": "Claude — Extract Lead Fields", "type": "main", "index": 0 },
+          { "node": "Claude — Score Lead", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Claude — Extract Lead Fields": {
+      "main": [[{ "node": "Route — Hot Lead?", "type": "main", "index": 0 }]]
+    },
+    "Claude — Score Lead": {
+      "main": [[{ "node": "Route — Hot Lead?", "type": "main", "index": 0 }]]
+    },
+    "Route — Hot Lead?": {
+      "main": [
+        [{ "node": "Airtable — Log to CRM", "type": "main", "index": 0 }],
+        [{ "node": "Gmail — Alert Sales Team", "type": "main", "index": 0 }]
+      ]
+    },
+    "Airtable — Log to CRM": {
+      "main": [[{ "node": "Gmail — Alert Sales Team", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": { "executionOrder": "v1" },
+  "tags": ["leads", "crm", "ai", "airtable", "gmail"]
+}

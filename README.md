@@ -745,13 +745,18 @@ Paste the `apps_script/*.gs` files into any Google Sheet for a native **⚡ AI W
 
 ## 📊 n8n Workflow Examples
 
-Import these from `n8n/workflows/` via the n8n UI (Settings → Import Workflow):
+Import these from `n8n/workflows/` via the n8n UI (Settings → Import Workflow).
+See [`n8n/README.md`](n8n/README.md) for full setup instructions.
 
-| Workflow | Trigger | AI Step | Actions |
-|---|---|---|---|
-| `email_triage.json` | Gmail webhook | Claude classify | Airtable + auto-reply |
-| `invoice_processing.json` | HTTP webhook | Claude extract | Airtable log + Gmail notify |
-| `meeting_scheduler.json` | HTTP webhook | Claude extract | Calendar create + Gmail confirm |
+| # | Workflow | Trigger | AI Step | Actions |
+|---|---|---|---|---|
+| 1 | `email_triage.json` | Gmail webhook | Claude classify | Airtable CRM + auto-reply |
+| 2 | `invoice_processing.json` | HTTP webhook | Claude extract | Airtable log + Gmail notify |
+| 3 | `meeting_scheduler.json` | HTTP webhook | Claude extract | Calendar create + Gmail confirm |
+| 4 | `lead_qualification.json` | HTTP webhook | Claude extract + score | Airtable CRM + Gmail sales alert |
+| 5 | `daily_kpi_report.json` | Schedule (08:00) | Claude summarize | Google Sheets log + Gmail report |
+| 6 | `support_ticket_auto_responder.json` | HTTP webhook | Claude classify + draft | Airtable log + Gmail reply + escalation |
+
 
 ---
 
