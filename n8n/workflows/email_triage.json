@@ -17,7 +17,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://app:8000/api/v1/ai/classify",
+        "url": "={{ \$env.APP_BASE_URL }}/api/v1/ai/classify",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -54,7 +54,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://app:8000/api/v1/airtable/bases/{{ $env.AIRTABLE_BASE_ID }}/tables/Leads/records",
+        "url": "={{ \$env.APP_BASE_URL }}/api/v1/airtable/bases/{{ $env.AIRTABLE_BASE_ID }}/tables/Leads/records",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -80,7 +80,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://app:8000/api/v1/google/gmail/send",
+        "url": "={{ \$env.APP_BASE_URL }}/api/v1/google/gmail/send",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
