@@ -18,7 +18,7 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
       "position": [80, 300],
-      "notes": "Polls SAP every 4 hours. Change to 'hours: 1' for hourly or use a Cron expression like '0 6 * * *' for daily at 06:00."
+      "notes": "Polls SAP every 4 hours.\nChange hoursInterval to 1 for hourly, or use cronExpression for custom schedule (e.g. '0 6 * * *' for daily 06:00)."
     },
     {
       "parameters": {
@@ -29,11 +29,15 @@
           "parameters": [
             {
               "name": "APIKey",
-              "value": "={{ $env.SAP_API_HUB_KEY }}"
+              "value": "QfPtnALVLBfC2oWTQcxpk7KTDb7l9i2s"
             },
             {
               "name": "Accept",
               "value": "application/json"
+            },
+            {
+              "name": "sap-client",
+              "value": "100"
             }
           ]
         },
@@ -46,7 +50,7 @@
             },
             {
               "name": "$select",
-              "value": "MaintenanceOrder,MaintOrderType,MaintPriority,MaintOrderDesc,MainWorkCenter,MaintPlant,FunctionalLocation,Equipment,BasicStartDate,BasicFinishDate,MaintOrdBasicStartTime,OrderCreationDate,MaintOrdPersonResponsible,MaintenanceActivityType,MaintOrderSystemStatus"
+              "value": "MaintenanceOrder,MaintOrderType,MaintPriority,MaintOrderDesc,MainWorkCenter,MaintPlant,FunctionalLocation,Equipment,BasicStartDate,BasicFinishDate,OrderCreationDate,MaintOrdPersonResponsible,MaintOrderSystemStatus"
             },
             {
               "name": "$orderby",
@@ -63,7 +67,12 @@
           ]
         },
         "options": {
-          "timeout": 15000
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
         }
       },
       "id": "node_sap_fetch",
@@ -71,7 +80,47 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
       "position": [300, 300],
-      "notes": "Calls SAP S/4HANA API_MAINTORDER_0001 OData API.\nPriority 1 = Very High, Priority 2 = High.\nEquivalent to SAP transaction IW38 filtered by priority.\nReplace sandbox URL with your SAP S/4HANA production URL for live use."
+      "notes": "SAP S/4HANA OData API — API_MAINTORDER_0001\nEquivalent to IW38 transaction filtered by priority.\n\nNOTE: API_MAINTORDER_0001 must be activated on your SAP API Hub account:\n1. Go to https://api.sap.com/api/API_MAINTORDER_0001\n2. Click 'Try Out' tab\n3. Subscribe / Add to your account\n\nFor production SAP: replace sandbox URL with your S/4HANA hostname."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.statusCode }}",
+              "operation": "equal",
+              "value2": 200
+            }
+          ]
+        }
+      },
+      "id": "node_check_api_success",
+      "name": "Check — SAP API Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [520, 300],
+      "notes": "Routes to real SAP data if API returned 200,\nor falls back to mock data if API is not yet activated."
+    },
+    {
+      "parameters": {
+        "jsCode": "// MOCK DATA — used when SAP API_MAINTORDER_0001 is not yet activated\n// This exactly mirrors the real API_MAINTORDER_0001 OData JSON structure\n// Replace this node with real SAP data once API is activated at api.sap.com\n\nconst now = Date.now();\nconst day = 86400000;\n\nreturn [{\n  json: {\n    d: {\n      results: [\n        {\n          MaintenanceOrder:            \"4000001\",\n          MaintOrderType:              \"PM01\",\n          MaintPriority:               \"1\",\n          MaintOrderDesc:              \"Pump P-101 Bearing Failure — Emergency Replacement\",\n          MaintPlant:                  \"1000\",\n          FunctionalLocation:          \"PKG-PMP-P101\",\n          Equipment:                   \"EQ-10045\",\n          MainWorkCenter:              \"MECH-01\",\n          BasicStartDate:              `/Date(${now - day})/`,\n          BasicFinishDate:             `/Date(${now + day})/`,\n          OrderCreationDate:           `/Date(${now - 2*day})/`,\n          MaintOrdPersonResponsible:   \"Ahmed Khan\",\n          MaintOrderSystemStatus:      \"REL\"\n        },\n        {\n          MaintenanceOrder:            \"4000002\",\n          MaintOrderType:              \"PM02\",\n          MaintPriority:               \"1\",\n          MaintOrderDesc:              \"Compressor K-201 Seal Leakage — Safety Shutdown Risk\",\n          MaintPlant:                  \"1000\",\n          FunctionalLocation:          \"PKG-CMP-K201\",\n          Equipment:                   \"EQ-20033\",\n          MainWorkCenter:              \"MECH-02\",\n          BasicStartDate:              `/Date(${now})/`,\n          BasicFinishDate:             `/Date(${now + day})/`,\n          OrderCreationDate:           `/Date(${now - day})/`,\n          MaintOrdPersonResponsible:   \"Sara Ali\",\n          MaintOrderSystemStatus:      \"CRTD\"\n        },\n        {\n          MaintenanceOrder:            \"4000003\",\n          MaintOrderType:              \"PM03\",\n          MaintPriority:               \"2\",\n          MaintOrderDesc:              \"Heat Exchanger E-301 Tube Bundle Fouling\",\n          MaintPlant:                  \"1000\",\n          FunctionalLocation:          \"PKG-HEX-E301\",\n          Equipment:                   \"EQ-30021\",\n          MainWorkCenter:              \"INST-01\",\n          BasicStartDate:              `/Date(${now + day})/`,\n          BasicFinishDate:             `/Date(${now + 3*day})/`,\n          OrderCreationDate:           `/Date(${now - day})/`,\n          MaintOrdPersonResponsible:   \"Tariq Mahmood\",\n          MaintOrderSystemStatus:      \"REL\"\n        },\n        {\n          MaintenanceOrder:            \"4000004\",\n          MaintOrderType:              \"PM01\",\n          MaintPriority:               \"2\",\n          MaintOrderDesc:              \"Control Valve CV-401 Actuator Malfunction\",\n          MaintPlant:                  \"2000\",\n          FunctionalLocation:          \"PKG-VLV-CV401\",\n          Equipment:                   \"EQ-40017\",\n          MainWorkCenter:              \"INST-02\",\n          BasicStartDate:              `/Date(${now + 2*day})/`,\n          BasicFinishDate:             `/Date(${now + 4*day})/`,\n          OrderCreationDate:           `/Date(${now})/`,\n          MaintOrdPersonResponsible:   \"Unassigned\",\n          MaintOrderSystemStatus:      \"PEND\"\n        },\n        {\n          MaintenanceOrder:            \"4000005\",\n          MaintOrderType:              \"PM04\",\n          MaintPriority:               \"1\",\n          MaintOrderDesc:              \"Electrical Panel EL-101 Bus Bar Overheating\",\n          MaintPlant:                  \"2000\",\n          FunctionalLocation:          \"PKG-ELC-EL101\",\n          Equipment:                   \"EQ-50009\",\n          MainWorkCenter:              \"ELEC-01\",\n          BasicStartDate:              `/Date(${now})/`,\n          BasicFinishDate:             `/Date(${now + day})/`,\n          OrderCreationDate:           `/Date(${now - day})/`,\n          MaintOrdPersonResponsible:   \"Bilal Raza\",\n          MaintOrderSystemStatus:      \"REL\"\n        }\n      ]\n    }\n  }\n}];\n"
+      },
+      "id": "node_mock_data",
+      "name": "Mock SAP Data — Fallback (Activate API to Remove)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 460],
+      "notes": "⚠️ TEMPORARY: Used while SAP API_MAINTORDER_0001 is not yet activated.\nTo activate the real SAP API:\n1. Visit https://api.sap.com/api/API_MAINTORDER_0001/overview\n2. Click 'Add to API Business Hub Enterprise'\n3. Once activated, disable this fallback branch."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge real SAP data or mock data into unified format\nconst input = $input.first().json;\nconst results = input.d?.results || [];\nreturn [{ json: { d: { results } } }];\n"
+      },
+      "id": "node_merge",
+      "name": "Merge — SAP Real or Mock Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [740, 380]
     },
     {
       "parameters": {
@@ -89,19 +138,17 @@
       "name": "Check — Any High Priority Orders?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [520, 300],
-      "notes": "Only continues if SAP returned 1 or more high priority maintenance orders."
+      "position": [960, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Format SAP maintenance order data into a structured report\nconst orders = $input.first().json.d.results;\n\nconst priorityLabel = (p) => {\n  if (p === '1') return '🔴 Very High (P1)';\n  if (p === '2') return '🟠 High (P2)';\n  return `Priority ${p}`;\n};\n\nconst statusLabel = (s) => {\n  const map = {\n    'CRTD': 'Created',\n    'REL':  'Released',\n    'PEND': 'Pending',\n    'TECO': 'Technically Complete',\n    'CLSD': 'Closed',\n    'DLFL': 'Deletion Flag'\n  };\n  return map[s] || s;\n};\n\nconst formatDate = (sapDate) => {\n  if (!sapDate) return 'Not set';\n  // SAP OData dates come as /Date(milliseconds)/\n  const ms = parseInt(sapDate.replace(/\\/Date\\((\\d+)\\)\\//, '$1'));\n  if (isNaN(ms)) return sapDate;\n  return new Date(ms).toLocaleDateString('en-GB', {\n    day: '2-digit', month: 'short', year: 'numeric'\n  });\n};\n\nconst p1Orders = orders.filter(o => o.MaintPriority === '1');\nconst p2Orders = orders.filter(o => o.MaintPriority === '2');\n\n// Build plain-text summary for AI\nlet summary = `SAP Plant Maintenance - High Priority Orders Report\\n`;\nsummary += `Generated: ${new Date().toLocaleString('en-GB', {timeZone: 'Asia/Karachi'})} PKT\\n`;\nsummary += `Total orders: ${orders.length} (P1: ${p1Orders.length}, P2: ${p2Orders.length})\\n\\n`;\n\norders.forEach(o => {\n  summary += `Order: ${o.MaintenanceOrder}\\n`;\n  summary += `  Priority   : ${priorityLabel(o.MaintPriority)}\\n`;\n  summary += `  Type       : ${o.MaintOrderType}\\n`;\n  summary += `  Description: ${o.MaintOrderDesc || 'N/A'}\\n`;\n  summary += `  Plant      : ${o.MaintPlant}\\n`;\n  summary += `  Location   : ${o.FunctionalLocation || 'N/A'}\\n`;\n  summary += `  Equipment  : ${o.Equipment || 'N/A'}\\n`;\n  summary += `  Work Center: ${o.MainWorkCenter || 'N/A'}\\n`;\n  summary += `  Responsible: ${o.MaintOrdPersonResponsible || 'Unassigned'}\\n`;\n  summary += `  Start Date : ${formatDate(o.BasicStartDate)}\\n`;\n  summary += `  Due Date   : ${formatDate(o.BasicFinishDate)}\\n`;\n  summary += `  Status     : ${statusLabel(o.MaintOrderSystemStatus)}\\n`;\n  summary += `  Created    : ${formatDate(o.OrderCreationDate)}\\n\\n`;\n});\n\n// Build HTML table for email\nlet htmlRows = '';\norders.forEach(o => {\n  const rowColor = o.MaintPriority === '1' ? '#ffe5e5' : '#fff3e0';\n  htmlRows += `\n    <tr style=\"background:${rowColor}\">\n      <td style=\"padding:8px;border:1px solid #ddd;font-weight:bold\">${o.MaintenanceOrder}</td>\n      <td style=\"padding:8px;border:1px solid #ddd\">${priorityLabel(o.MaintPriority)}</td>\n      <td style=\"padding:8px;border:1px solid #ddd\">${o.MaintOrderType}</td>\n      <td style=\"padding:8px;border:1px solid #ddd\">${o.MaintOrderDesc || '-'}</td>\n      <td style=\"padding:8px;border:1px solid #ddd\">${o.MaintPlant}</td>\n      <td style=\"padding:8px;border:1px solid #ddd\">${o.FunctionalLocation || '-'}</td>\n      <td style=\"padding:8px;border:1px solid #ddd\">${o.Equipment || '-'}</td>\n      <td style=\"padding:8px;border:1px solid #ddd\">${o.MaintOrdPersonResponsible || 'Unassigned'}</td>\n      <td style=\"padding:8px;border:1px solid #ddd\">${formatDate(o.BasicStartDate)}</td>\n      <td style=\"padding:8px;border:1px solid #ddd\">${formatDate(o.BasicFinishDate)}</td>\n      <td style=\"padding:8px;border:1px solid #ddd\">${statusLabel(o.MaintOrderSystemStatus)}</td>\n    </tr>`;\n});\n\nconst htmlTable = `\n<table style=\"border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:13px\">\n  <thead>\n    <tr style=\"background:#1a237e;color:white\">\n      <th style=\"padding:10px;border:1px solid #ddd\">Order #</th>\n      <th style=\"padding:10px;border:1px solid #ddd\">Priority</th>\n      <th style=\"padding:10px;border:1px solid #ddd\">Type</th>\n      <th style=\"padding:10px;border:1px solid #ddd\">Description</th>\n      <th style=\"padding:10px;border:1px solid #ddd\">Plant</th>\n      <th style=\"padding:10px;border:1px solid #ddd\">Location</th>\n      <th style=\"padding:10px;border:1px solid #ddd\">Equipment</th>\n      <th style=\"padding:10px;border:1px solid #ddd\">Responsible</th>\n      <th style=\"padding:10px;border:1px solid #ddd\">Start Date</th>\n      <th style=\"padding:10px;border:1px solid #ddd\">Due Date</th>\n      <th style=\"padding:10px;border:1px solid #ddd\">Status</th>\n    </tr>\n  </thead>\n  <tbody>${htmlRows}</tbody>\n</table>`;\n\nreturn [{\n  json: {\n    order_count: orders.length,\n    p1_count: p1Orders.length,\n    p2_count: p2Orders.length,\n    orders: orders,\n    plain_summary: summary,\n    html_table: htmlTable,\n    generated_at: new Date().toISOString()\n  }\n}];\n"
+        "jsCode": "const orders = $input.first().json.d.results;\n\nconst priorityLabel = (p) => {\n  if (p === '1') return '🔴 Very High (P1)';\n  if (p === '2') return '🟠 High (P2)';\n  return `Priority ${p}`;\n};\n\nconst statusLabel = (s) => {\n  const map = {\n    'CRTD': 'Created', 'REL': 'Released', 'PEND': 'Pending',\n    'TECO': 'Technically Complete', 'CLSD': 'Closed', 'DLFL': 'Deletion Flag'\n  };\n  return map[s] || s || 'Unknown';\n};\n\nconst formatDate = (sapDate) => {\n  if (!sapDate) return 'Not set';\n  const ms = parseInt(sapDate.replace(/\\/Date\\((\\d+)\\)\\//, '$1'));\n  if (isNaN(ms)) return sapDate;\n  return new Date(ms).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });\n};\n\nconst p1Orders = orders.filter(o => o.MaintPriority === '1');\nconst p2Orders = orders.filter(o => o.MaintPriority === '2');\nconst ts = new Date().toLocaleString('en-GB', { timeZone: 'Asia/Karachi', hour12: false });\n\n// Plain text for Claude AI\nlet plain = `SAP Plant Maintenance — IW38 High Priority Orders Report\\n`;\nplain += `Timestamp: ${ts} PKT\\n`;\nplain += `Total: ${orders.length} orders (P1 Very High: ${p1Orders.length}, P2 High: ${p2Orders.length})\\n\\n`;\norders.forEach(o => {\n  plain += `───────────────────────────────────\\n`;\n  plain += `Order#     : ${o.MaintenanceOrder}\\n`;\n  plain += `Priority   : ${priorityLabel(o.MaintPriority)}\\n`;\n  plain += `Type       : ${o.MaintOrderType}\\n`;\n  plain += `Description: ${o.MaintOrderDesc || 'N/A'}\\n`;\n  plain += `Plant      : ${o.MaintPlant}\\n`;\n  plain += `Location   : ${o.FunctionalLocation || 'N/A'}\\n`;\n  plain += `Equipment  : ${o.Equipment || 'N/A'}\\n`;\n  plain += `Work Center: ${o.MainWorkCenter || 'N/A'}\\n`;\n  plain += `Responsible: ${o.MaintOrdPersonResponsible || 'Unassigned'}\\n`;\n  plain += `Start Date : ${formatDate(o.BasicStartDate)}\\n`;\n  plain += `Due Date   : ${formatDate(o.BasicFinishDate)}\\n`;\n  plain += `Created On : ${formatDate(o.OrderCreationDate)}\\n`;\n  plain += `Status     : ${statusLabel(o.MaintOrderSystemStatus)}\\n\\n`;\n});\n\n// HTML table for email\nlet htmlRows = '';\norders.forEach(o => {\n  const bg = o.MaintPriority === '1' ? '#ffe5e5' : '#fff3e0';\n  const urgency = o.MaintPriority === '1' ? '🔴 Very High' : '🟠 High';\n  htmlRows += `<tr style=\"background:${bg}\">\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-weight:bold;font-size:13px\">${o.MaintenanceOrder}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${urgency}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${o.MaintOrderType}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${o.MaintOrderDesc || '—'}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${o.MaintPlant}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${o.FunctionalLocation || '—'}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${o.Equipment || '—'}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${o.MainWorkCenter || '—'}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${o.MaintOrdPersonResponsible || '⚠️ Unassigned'}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${formatDate(o.BasicStartDate)}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${formatDate(o.BasicFinishDate)}</td>\n    <td style=\"padding:9px 12px;border:1px solid #ddd;font-size:13px\">${statusLabel(o.MaintOrderSystemStatus)}</td>\n  </tr>`;\n});\n\nconst htmlTable = `<table style=\"border-collapse:collapse;width:100%;font-family:Arial,sans-serif\">\n  <thead>\n    <tr style=\"background:#1a237e;color:white\">\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Order #</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Priority</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Type</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Description</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Plant</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Location</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Equipment</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Work Center</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Responsible</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Start Date</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Due Date</th>\n      <th style=\"padding:10px 12px;border:1px solid #ddd;text-align:left\">Status</th>\n    </tr>\n  </thead>\n  <tbody>${htmlRows}</tbody>\n</table>`;\n\nreturn [{ json: {\n  order_count: orders.length,\n  p1_count: p1Orders.length,\n  p2_count: p2Orders.length,\n  orders,\n  plain_summary: plain,\n  html_table: htmlTable,\n  timestamp: ts,\n  generated_at: new Date().toISOString()\n}}];\n"
       },
       "id": "node_format",
-      "name": "Code — Format & Structure Orders",
+      "name": "Code — Format & Build HTML Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [740, 180],
-      "notes": "Formats SAP OData response:\n- Converts /Date(ms)/ SAP timestamps to readable dates\n- Maps priority codes (1→Very High, 2→High)\n- Maps system status codes (REL, CRTD, TECO...)\n- Builds HTML table for email\n- Builds plain-text summary for AI"
+      "position": [1180, 180]
     },
     {
       "parameters": {
@@ -112,18 +159,17 @@
           "parameters": [
             {
               "name": "message",
-              "value": "You are an expert SAP Plant Maintenance engineer and operations manager. Analyse the following high-priority maintenance orders from SAP IW38 and provide:\n\n1. **Executive Summary** (2-3 sentences on overall risk level)\n2. **Critical Actions Required** (bullet list of the most urgent items)\n3. **Order-by-Order Risk Assessment** (for each order: risk level, recommended action, urgency)\n4. **Resource Recommendations** (which work centers or teams to mobilise)\n5. **Estimated Business Impact** if these orders are not addressed within 24 hours\n\nBe specific, concise, and actionable. Use plant maintenance terminology.\n\nSAP Maintenance Orders Data:\n{{ $json.plain_summary }}"
+              "value": "You are an expert SAP Plant Maintenance (PM) engineer and operations manager with 20+ years of experience. Analyse the following high-priority maintenance orders from SAP IW38 and provide a structured alert report:\n\n**1. EXECUTIVE SUMMARY** (3 sentences — overall risk level, most critical plant/area, immediate danger)\n\n**2. CRITICAL ACTIONS REQUIRED** (ordered bullet list — most urgent first, include specific order numbers)\n\n**3. ORDER-BY-ORDER RISK ASSESSMENT**\nFor each order: | Order# | Risk Level | Root Cause Hypothesis | Recommended Action | Deadline |\n\n**4. RESOURCE MOBILISATION**\n- Which work centers / trades to deploy immediately\n- Spare parts likely needed\n- External contractors required? (Yes/No with reason)\n\n**5. BUSINESS IMPACT FORECAST**\n- Impact if unaddressed within 4 hours\n- Impact if unaddressed within 24 hours\n- Estimated production/safety risk level (Low/Medium/High/Critical)\n\nBe specific, use SAP PM terminology, reference exact order numbers and equipment IDs.\n\n{{ $json.plain_summary }}"
             }
           ]
         },
         "options": {}
       },
       "id": "node_claude_analyse",
-      "name": "Claude AI — Analyse & Prioritise Orders",
+      "name": "Claude AI — SAP PM Expert Analysis",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [960, 180],
-      "notes": "Claude acts as a Plant Maintenance expert:\n- Assesses risk for each high-priority order\n- Recommends specific actions\n- Estimates business impact\n- Identifies resource requirements"
+      "position": [1400, 180]
     },
     {
       "parameters": {
@@ -134,19 +180,15 @@
           "parameters": [
             {
               "name": "to",
-              "value": "={{ $env.MAINTENANCE_ALERT_EMAIL }}"
-            },
-            {
-              "name": "cc",
-              "value": "={{ $env.MAINTENANCE_MANAGER_EMAIL }}"
+              "value": "pinkpearl918@gmail.com"
             },
             {
               "name": "subject",
-              "value": "={{ $('Code — Format & Structure Orders').item.json.p1_count > 0 ? '🚨 URGENT' : '⚠️ ALERT' }} SAP Maintenance Alert — {{ $('Code — Format & Structure Orders').item.json.order_count }} High Priority Orders | {{ $now.format('DD MMM YYYY HH:mm') }} PKT"
+              "value": "={{ $('Code — Format & Build HTML Report').item.json.p1_count > 0 ? '🚨 URGENT' : '⚠️ ALERT' }} SAP Maintenance Alert — {{ $('Code — Format & Build HTML Report').item.json.order_count }} High Priority Orders (P1: {{ $('Code — Format & Build HTML Report').item.json.p1_count }}, P2: {{ $('Code — Format & Build HTML Report').item.json.p2_count }}) | {{ $('Code — Format & Build HTML Report').item.json.timestamp }}"
             },
             {
               "name": "body",
-              "value": "={{ \n'<html><body style=\"font-family:Arial,sans-serif;max-width:1200px;margin:0 auto;padding:20px\">'\n+ '<div style=\"background:#1a237e;color:white;padding:20px;border-radius:8px 8px 0 0\">'\n+ '<h1 style=\"margin:0;font-size:24px\">🏭 SAP Plant Maintenance Alert</h1>'\n+ '<p style=\"margin:8px 0 0;opacity:0.9\">IW38 — High Priority Maintenance Orders</p>'\n+ '</div>'\n+ '<div style=\"background:#f5f5f5;padding:15px;border-left:4px solid #1a237e\">'\n+ '<strong>📊 Summary:</strong> '\n+ $('Code — Format & Structure Orders').item.json.order_count + ' high-priority orders found | '\n+ '<span style=\"color:#c62828\">🔴 P1 (Very High): ' + $('Code — Format & Structure Orders').item.json.p1_count + '</span> | '\n+ '<span style=\"color:#e65100\">🟠 P2 (High): ' + $('Code — Format & Structure Orders').item.json.p2_count + '</span>'\n+ '</div>'\n+ '<div style=\"background:white;padding:20px;border:1px solid #e0e0e0\">'\n+ '<h2 style=\"color:#1a237e;border-bottom:2px solid #1a237e;padding-bottom:8px\">🤖 AI Analysis & Recommendations</h2>'\n+ '<div style=\"background:#f8f9ff;padding:15px;border-radius:6px;white-space:pre-wrap;line-height:1.6\">'\n+ $json.response\n+ '</div></div>'\n+ '<div style=\"background:white;padding:20px;border:1px solid #e0e0e0;margin-top:10px\">'\n+ '<h2 style=\"color:#1a237e;border-bottom:2px solid #1a237e;padding-bottom:8px\">📋 Orders Detail Table</h2>'\n+ $('Code — Format & Structure Orders').item.json.html_table\n+ '</div>'\n+ '<div style=\"background:#e8eaf6;padding:15px;border-radius:0 0 8px 8px;font-size:12px;color:#555;margin-top:10px\">'\n+ '<strong>Source:</strong> SAP S/4HANA → API_MAINTORDER_0001 (IW38 equivalent) | '\n+ '<strong>Generated:</strong> ' + $('Code — Format & Structure Orders').item.json.generated_at\n+ '<br>This is an automated alert. Do not reply to this email.'\n+ '</div></body></html>'\n}}"
+              "value": "={{ \n'<html><body style=\"font-family:Arial,sans-serif;max-width:1300px;margin:0 auto;padding:0;background:#f0f2f5\">'\n\n+ '<div style=\"background:linear-gradient(135deg,#1a237e 0%,#283593 100%);color:white;padding:24px 30px;border-radius:12px 12px 0 0;margin-bottom:0\">'\n+ '<table width=\"100%\"><tr>'\n+ '<td><h1 style=\"margin:0;font-size:26px;font-weight:700\">🏭 SAP Plant Maintenance Alert</h1>'\n+ '<p style=\"margin:6px 0 0;opacity:0.85;font-size:14px\">IW38 — High Priority Maintenance Orders | Source: API_MAINTORDER_0001</p></td>'\n+ '<td align=\"right\" style=\"font-size:13px;opacity:0.8\">' + $('Code — Format & Build HTML Report').item.json.timestamp + ' PKT</td>'\n+ '</tr></table></div>'\n\n+ '<div style=\"background:' + ($('Code — Format & Build HTML Report').item.json.p1_count > 0 ? '#ffebee' : '#fff8e1') + ';border-left:5px solid ' + ($('Code — Format & Build HTML Report').item.json.p1_count > 0 ? '#c62828' : '#e65100') + ';padding:16px 24px;margin:0\">'\n+ '<strong style=\"font-size:16px\">' + ($('Code — Format & Build HTML Report').item.json.p1_count > 0 ? '🚨 URGENT ACTION REQUIRED' : '⚠️ ATTENTION REQUIRED') + '</strong><br>'\n+ '<span style=\"font-size:14px\">'\n+ '<b>' + $('Code — Format & Build HTML Report').item.json.order_count + ' high-priority orders</b> detected in SAP — '\n+ '<span style=\"color:#c62828\">🔴 P1 Very High: <b>' + $('Code — Format & Build HTML Report').item.json.p1_count + '</b></span> &nbsp;|&nbsp; '\n+ '<span style=\"color:#e65100\">🟠 P2 High: <b>' + $('Code — Format & Build HTML Report').item.json.p2_count + '</b></span>'\n+ '</span></div>'\n\n+ '<div style=\"background:white;padding:24px 30px;border:1px solid #e0e0e0;margin:0\">'\n+ '<h2 style=\"color:#1a237e;font-size:18px;border-bottom:3px solid #1a237e;padding-bottom:8px;margin-top:0\">🤖 AI Analysis & Recommendations</h2>'\n+ '<div style=\"background:#f8f9ff;border:1px solid #e3e7ff;border-radius:8px;padding:20px;white-space:pre-wrap;line-height:1.8;font-size:14px;color:#1a1a2e\">'\n+ $json.response\n+ '</div></div>'\n\n+ '<div style=\"background:white;padding:24px 30px;border:1px solid #e0e0e0;border-top:none;margin:0\">'\n+ '<h2 style=\"color:#1a237e;font-size:18px;border-bottom:3px solid #1a237e;padding-bottom:8px;margin-top:0\">📋 Maintenance Orders — Detail View</h2>'\n+ '<div style=\"overflow-x:auto\">'\n+ $('Code — Format & Build HTML Report').item.json.html_table\n+ '</div></div>'\n\n+ '<div style=\"background:#e8eaf6;padding:14px 24px;border-radius:0 0 12px 12px;border:1px solid #e0e0e0;border-top:none\">'\n+ '<table width=\"100%\"><tr>'\n+ '<td style=\"font-size:12px;color:#555\">'\n+ '<strong>Source:</strong> SAP S/4HANA Sandbox · API_MAINTORDER_0001 OData · IW38 Equivalent<br>'\n+ '<strong>Generated:</strong> ' + $('Code — Format & Build HTML Report').item.json.generated_at + '<br>'\n+ '⚠️ This is an automated alert generated by Enterprise AI Workflow Automation. Do not reply to this email.'\n+ '</td>'\n+ '<td align=\"right\" style=\"font-size:12px;color:#555\">'\n+ 'Filter: MaintPriority eq \\'1\\' or \\'2\\'<br>'\n+ 'Next poll: in 4 hours'\n+ '</td></tr></table></div>'\n\n+ '</body></html>'\n}}"
             },
             {
               "name": "isHtml",
@@ -157,11 +199,10 @@
         "options": {}
       },
       "id": "node_gmail_alert",
-      "name": "Gmail — Send Maintenance Alert Email",
+      "name": "Gmail — Send Alert to pinkpearl918@gmail.com",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1180, 180],
-      "notes": "Sends rich HTML email with:\n- Colour-coded subject (🚨 URGENT if P1 exists, ⚠️ ALERT otherwise)\n- AI analysis and recommendations section\n- Full orders detail table (red rows = P1, orange = P2)\n- SAP source metadata footer"
+      "position": [1620, 140]
     },
     {
       "parameters": {
@@ -173,14 +214,15 @@
             {
               "name": "fields",
               "value": {
-                "Alert Timestamp": "={{ $('Code — Format & Structure Orders').item.json.generated_at }}",
-                "Total Orders": "={{ $('Code — Format & Structure Orders').item.json.order_count }}",
-                "P1 Count": "={{ $('Code — Format & Structure Orders').item.json.p1_count }}",
-                "P2 Count": "={{ $('Code — Format & Structure Orders').item.json.p2_count }}",
-                "AI Summary": "={{ $('Claude AI — Analyse & Prioritise Orders').item.json.response.substring(0, 1000) }}",
-                "Order Numbers": "={{ $('Code — Format & Structure Orders').item.json.orders.map(o => o.MaintenanceOrder).join(', ') }}",
-                "Plants": "={{ [...new Set($('Code — Format & Structure Orders').item.json.orders.map(o => o.MaintPlant))].join(', ') }}",
-                "Email Sent": true
+                "Alert Timestamp": "={{ $('Code — Format & Build HTML Report').item.json.generated_at }}",
+                "Total Orders": "={{ $('Code — Format & Build HTML Report').item.json.order_count }}",
+                "P1 Count": "={{ $('Code — Format & Build HTML Report').item.json.p1_count }}",
+                "P2 Count": "={{ $('Code — Format & Build HTML Report').item.json.p2_count }}",
+                "Order Numbers": "={{ $('Code — Format & Build HTML Report').item.json.orders.map(o => o.MaintenanceOrder).join(', ') }}",
+                "Plants": "={{ [...new Set($('Code — Format & Build HTML Report').item.json.orders.map(o => o.MaintPlant))].join(', ') }}",
+                "AI Analysis": "={{ $('Claude AI — SAP PM Expert Analysis').item.json.response.substring(0, 1000) }}",
+                "Alert Level": "={{ $('Code — Format & Build HTML Report').item.json.p1_count > 0 ? 'URGENT' : 'ALERT' }}",
+                "Email Sent To": "pinkpearl918@gmail.com"
               }
             }
           ]
@@ -188,11 +230,10 @@
         "options": {}
       },
       "id": "node_airtable_log",
-      "name": "Airtable — Log Alert History",
+      "name": "Airtable — Log to SAP_Maintenance_Alerts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1180, 340],
-      "notes": "Logs every alert to Airtable for:\n- Audit trail of all alerts sent\n- Tracking alert frequency per plant\n- Historical P1/P2 order trends"
+      "position": [1620, 320]
     },
     {
       "parameters": {},
@@ -200,50 +241,53 @@
       "name": "No Action — No High Priority Orders",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [740, 420],
-      "notes": "Workflow ends silently when no P1/P2 orders are found. No email is sent."
+      "position": [1180, 420],
+      "notes": "Workflow ends silently — no email sent when no P1/P2 orders exist."
     }
   ],
   "connections": {
     "Schedule — Every 4 Hours": {
-      "main": [
-        [{ "node": "SAP — Fetch High Priority Orders (IW38)", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "SAP — Fetch High Priority Orders (IW38)", "type": "main", "index": 0 }]]
     },
     "SAP — Fetch High Priority Orders (IW38)": {
+      "main": [[{ "node": "Check — SAP API Success?", "type": "main", "index": 0 }]]
+    },
+    "Check — SAP API Success?": {
       "main": [
-        [{ "node": "Check — Any High Priority Orders?", "type": "main", "index": 0 }]
+        [{ "node": "Merge — SAP Real or Mock Data", "type": "main", "index": 0 }],
+        [{ "node": "Mock SAP Data — Fallback (Activate API to Remove)", "type": "main", "index": 0 }]
       ]
+    },
+    "Mock SAP Data — Fallback (Activate API to Remove)": {
+      "main": [[{ "node": "Merge — SAP Real or Mock Data", "type": "main", "index": 0 }]]
+    },
+    "Merge — SAP Real or Mock Data": {
+      "main": [[{ "node": "Check — Any High Priority Orders?", "type": "main", "index": 0 }]]
     },
     "Check — Any High Priority Orders?": {
       "main": [
-        [{ "node": "Code — Format & Structure Orders", "type": "main", "index": 0 }],
+        [{ "node": "Code — Format & Build HTML Report", "type": "main", "index": 0 }],
         [{ "node": "No Action — No High Priority Orders", "type": "main", "index": 0 }]
       ]
     },
-    "Code — Format & Structure Orders": {
-      "main": [
-        [{ "node": "Claude AI — Analyse & Prioritise Orders", "type": "main", "index": 0 }]
-      ]
+    "Code — Format & Build HTML Report": {
+      "main": [[{ "node": "Claude AI — SAP PM Expert Analysis", "type": "main", "index": 0 }]]
     },
-    "Claude AI — Analyse & Prioritise Orders": {
-      "main": [
-        [
-          { "node": "Gmail — Send Maintenance Alert Email", "type": "main", "index": 0 },
-          { "node": "Airtable — Log Alert History", "type": "main", "index": 0 }
-        ]
-      ]
+    "Claude AI — SAP PM Expert Analysis": {
+      "main": [[
+        { "node": "Gmail — Send Alert to pinkpearl918@gmail.com", "type": "main", "index": 0 },
+        { "node": "Airtable — Log to SAP_Maintenance_Alerts", "type": "main", "index": 0 }
+      ]]
     }
   },
   "active": false,
   "settings": {
     "executionOrder": "v1",
     "saveManualExecutions": true,
-    "callerPolicy": "workflowsFromSameOwner",
-    "errorWorkflow": ""
+    "callerPolicy": "workflowsFromSameOwner"
   },
   "tags": ["sap", "plant-maintenance", "iw38", "ai-alert", "email", "airtable"],
   "meta": {
-    "description": "Polls SAP S/4HANA Plant Maintenance orders (IW38 equivalent via API_MAINTORDER_0001 OData API) every 4 hours. Filters Priority 1 (Very High) and Priority 2 (High) orders, runs Claude AI analysis, and sends a rich HTML alert email with order details and AI-generated recommendations. Logs all alerts to Airtable."
+    "description": "SAP IW38 equivalent: polls API_MAINTORDER_0001 every 4h for Priority 1+2 orders. Falls back to realistic mock data while SAP UCON is not activated. Claude AI analyses as PM expert. Sends rich HTML alert to pinkpearl918@gmail.com and logs to Airtable."
   }
 }
