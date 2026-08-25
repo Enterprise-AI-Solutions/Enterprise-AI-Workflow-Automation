@@ -6,6 +6,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from app.services.integrations import n8n_service
+from app.services.integrations.n8n import scan_workflow_files
 
 router = APIRouter(prefix="/n8n", tags=["n8n"])
 
@@ -19,10 +20,27 @@ class ActivateWorkflowRequest(BaseModel):
     active: bool = True
 
 
-@router.get("/workflows", summary="List n8n workflows")
+@router.get("/workflows", summary="List n8n workflows (real API or local files)")
 async def list_n8n_workflows():
     workflows = await n8n_service.list_workflows()
     return {"workflows": workflows, "count": len(workflows), "demo_mode": not n8n_service.enabled}
+
+
+@router.get("/workflow-files", summary="Scan n8n/workflows/ folder and return all discovered workflows")
+async def list_workflow_files():
+    """
+    Auto-scans the n8n/workflows/ directory and returns metadata for every
+    .json file found. This is the source of truth for the dashboard filter
+    dropdown — no manual registration needed when adding new workflows.
+    """
+    workflows = scan_workflow_files()
+    # Strip non-serialisable output_template
+    serialisable = [{k: v for k, v in wf.items() if k != "output_template"} for wf in workflows]
+    return {
+        "workflows": serialisable,
+        "count": len(serialisable),
+        "directory": "n8n/workflows/",
+    }
 
 
 @router.post("/trigger", summary="Trigger an n8n webhook")

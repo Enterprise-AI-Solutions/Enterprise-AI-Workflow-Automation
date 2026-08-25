@@ -199,13 +199,7 @@
         <div class="n8n-filters">
             <select id="filter-workflow" class="form-select n8n-filter-select" onchange="applyN8nFilter()">
                 <option value="">All Workflows</option>
-                <option value="1">📧 Email Triage</option>
-                <option value="2">🧾 Invoice Processing</option>
-                <option value="3">📅 Meeting Scheduler</option>
-                <option value="4">🎯 Lead Qualification</option>
-                <option value="5">📊 Daily KPI Report</option>
-                <option value="6">🎫 Support Ticket Auto-Responder</option>
-                <option value="7">🏭 SAP Maintenance AI Alert</option>
+                <!-- populated dynamically from /api/v1/n8n/workflow-files -->
             </select>
             <select id="filter-status" class="form-select n8n-filter-select" onchange="applyN8nFilter()">
                 <option value="">All Statuses</option>
@@ -254,6 +248,7 @@
             </div>
             <div class="endpoint-group">
                 <div class="endpoint-group-title">⚡ n8n Executions</div>
+                <div class="endpoint-item"><span class="method get">GET</span><code>/api/v1/n8n/workflow-files</code><small style="color:var(--text-muted)"> — auto-scan folder</small></div>
                 <div class="endpoint-item"><span class="method get">GET</span><code>/api/v1/n8n/workflows</code></div>
                 <div class="endpoint-item"><span class="method get">GET</span><code>/api/v1/n8n/executions</code></div>
                 <div class="endpoint-item"><span class="method get">GET</span><code>/api/v1/n8n/executions/stats</code></div>
@@ -457,6 +452,28 @@ function intName(key) {
 
 let _n8nAllExecutions = [];   // cache for client-side filter
 let _n8nRefreshTimer = null;
+let _n8nWorkflowFiles = [];   // cache of discovered workflow files
+
+// Populate filter dropdown from /api/v1/n8n/workflow-files (auto-discovered)
+async function loadWorkflowFilesFilter() {
+    try {
+        const res  = await fetch(`${API}/n8n/workflow-files`);
+        const data = await res.json();
+        _n8nWorkflowFiles = data.workflows || [];
+        const sel = document.getElementById('filter-workflow');
+        // Keep the 'All Workflows' option, remove old dynamic options
+        sel.querySelectorAll('option.dynamic').forEach(o => o.remove());
+        _n8nWorkflowFiles.forEach(wf => {
+            const opt = document.createElement('option');
+            opt.value = wf.id;
+            opt.className = 'dynamic';
+            opt.textContent = `${wf.emoji} ${wf.name}`;
+            sel.appendChild(opt);
+        });
+    } catch(e) {
+        console.warn('Could not load workflow files for filter:', e.message);
+    }
+}
 
 async function loadN8nDashboard() {
     // Pulse the LIVE badge
@@ -587,11 +604,15 @@ function applyN8nFilter() {
 }
 
 function filterByWorkflowName(name) {
-    // Find the matching workflowId from cache
+    // Find the matching workflowId from execution cache
     const exec = _n8nAllExecutions.find(e => e.workflowName === name);
     if (exec) {
         const sel = document.getElementById('filter-workflow');
-        sel.value = exec.workflowId;
+        // Try to match by id, fall back to name match in options
+        const matchingOpt = Array.from(sel.options).find(
+            o => o.value === exec.workflowId || o.textContent.includes(name.substring(0, 20))
+        );
+        if (matchingOpt) sel.value = matchingOpt.value;
         applyN8nFilter();
         document.getElementById('n8n-dashboard').scrollIntoView({behavior:'smooth'});
     }
@@ -632,6 +653,7 @@ function startN8nAutoRefresh() {
 loadHealth();
 loadStats();
 loadWorkflows();
+loadWorkflowFilesFilter();   // populate n8n workflow dropdown from folder scan
 loadN8nDashboard();
 startN8nAutoRefresh();
 </script>
