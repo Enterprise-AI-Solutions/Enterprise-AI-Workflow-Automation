@@ -9,63 +9,99 @@
         "options": {}
       },
       "id": "node_webhook_ticket",
-      "name": "Webhook — New Support Ticket",
+      "name": "Webhook -- New Support Ticket",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [100, 300]
+      "position": [
+        100,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/classify",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "text",
-              "value": "={{ $json.body.subject + ' ' + $json.body.message }}"
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.groq_api_key }}"
             },
             {
-              "name": "categories",
-              "value": ["Billing", "Technical Bug", "Feature Request", "Account Access", "General Question", "Urgent / Outage"]
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\": \"llama-3.3-70b-versatile\", \"temperature\": 0.3, \"max_tokens\": 1024, \"messages\": [{\"role\": \"system\", \"content\": \"You are a customer support ticket classification assistant.\"}, {\"role\": \"user\", \"content\": \"Classify this support ticket into exactly one category: Billing, Technical Bug, Feature Request, Account Access, General Question, Urgent / Outage.\\n\\nTicket:\\nSubject: {{ $json.body.subject }}\\nMessage: {{ $json.body.message }}\\n\\nRespond with ONLY valid JSON: {\\\"category\\\": \\\"<chosen category>\\\"}\"}]}",
+        "options": {
+          "timeout": 60000
+        }
       },
-      "id": "node_claude_classify",
-      "name": "Claude — Classify Ticket",
+      "id": "node_groq_classify",
+      "name": "Groq -- Classify Ticket",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [300, 200]
+      "typeVersion": 4,
+      "position": [
+        300,
+        180
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/chat",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "message",
-              "value": "You are a friendly and professional customer support agent for Enterprise AI Solutions. A customer has submitted the following support ticket:\n\nSubject: {{ $('Webhook — New Support Ticket').item.json.body.subject }}\nMessage: {{ $('Webhook — New Support Ticket').item.json.body.message }}\nCategory: {{ $('Claude — Classify Ticket').item.json.category }}\n\nWrite a helpful, empathetic first-response email. Acknowledge their issue, provide any immediate advice if possible, and let them know a human agent will follow up within 4 business hours. Do not sign with a specific name — use 'Enterprise AI Support Team'."
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.groq_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\": \"llama-3.3-70b-versatile\", \"temperature\": 0.3, \"max_tokens\": 1024, \"messages\": [{\"role\": \"system\", \"content\": \"You are a friendly and professional customer support agent for Enterprise AI Solutions. Write empathetic, helpful first-response emails. Always sign as 'Enterprise AI Support Team'.\"}, {\"role\": \"user\", \"content\": \"A customer submitted this support ticket:\\n\\nSubject: {{ $('Webhook -- New Support Ticket').item.json.body.subject }}\\nMessage: {{ $('Webhook -- New Support Ticket').item.json.body.message }}\\n\\nWrite a helpful, empathetic first-response email. Acknowledge their issue, provide immediate advice if possible, and let them know a human agent will follow up within 4 business hours. Sign as 'Enterprise AI Support Team'.\\n\\nRespond with ONLY valid JSON: {\\\"response\\\": \\\"<email body>\\\"}\"}]}",
+        "options": {
+          "timeout": 60000
+        }
       },
-      "id": "node_claude_draft",
-      "name": "Claude — Draft Response",
+      "id": "node_groq_draft",
+      "name": "Groq -- Draft Response",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [300, 400]
+      "typeVersion": 4,
+      "position": [
+        300,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const classRaw = $('Groq -- Classify Ticket').item.json?.choices?.[0]?.message?.content || '{\"category\":\"General Question\"}';\nconst draftRaw = $('Groq -- Draft Response').item.json?.choices?.[0]?.message?.content || '{\"response\":\"Thank you for contacting us. We will respond shortly.\"}';\nlet category = 'General Question', response = 'Thank you for contacting us.';\ntry { const m = classRaw.match(/\\{[^}]+\\}/); if(m) category = JSON.parse(m[0]).category; } catch(e){}\ntry { const m = draftRaw.match(/\\{[\\s\\S]*?\\}/); if(m) response = JSON.parse(m[0]).response; } catch(e){ response = draftRaw; }\nconst wh = $('Webhook -- New Support Ticket').item.json.body || {};\nreturn [{ json: { category, response, from: wh.from, subject: wh.subject } }];"
+      },
+      "id": "node_merge_ticket",
+      "name": "Code -- Merge Ticket Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        300
+      ]
     },
     {
       "parameters": {
         "conditions": {
           "string": [
             {
-              "value1": "={{ $('Claude — Classify Ticket').item.json.category }}",
+              "value1": "={{ $json.category }}",
               "operation": "equals",
               "value2": "Urgent / Outage"
             }
@@ -73,129 +109,193 @@
         }
       },
       "id": "node_route_urgent",
-      "name": "Route — Urgent?",
+      "name": "Route -- Urgent?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [540, 300]
+      "position": [
+        740,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/airtable/bases/{{ $vars.AIRTABLE_BASE_ID }}/tables/Support Tickets/records",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "=https://api.airtable.com/v0/{{ $('Webhook -- New Support Ticket').item.json.body.airtable_base_id || 'YOUR_BASE_ID' }}/Support Tickets",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "fields",
-              "value": {
-                "Customer Email": "={{ $('Webhook — New Support Ticket').item.json.body.from }}",
-                "Subject": "={{ $('Webhook — New Support Ticket').item.json.body.subject }}",
-                "Category": "={{ $('Claude — Classify Ticket').item.json.category }}",
-                "Priority": "={{ $('Claude — Classify Ticket').item.json.category === 'Urgent / Outage' ? 'Critical' : 'Normal' }}",
-                "Status": "Open",
-                "AI Draft": "={{ $('Claude — Draft Response').item.json.response }}",
-                "Created": "={{ $now }}"
-              }
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Webhook -- New Support Ticket').item.json.body.airtable_token || 'YOUR_TOKEN' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"records\":[{\"fields\":{\"Customer Email\":\"{{ $json.from }}\",\"Subject\":\"{{ $json.subject }}\",\"Category\":\"{{ $json.category }}\",\"Priority\":\"{{ $json.category === 'Urgent / Outage' ? 'Critical' : 'Normal' }}\",\"Status\":\"Open\",\"AI Draft\":\"{{ $json.response }}\"}}]}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       },
       "id": "node_airtable_ticket",
-      "name": "Airtable — Log Ticket",
+      "name": "Airtable -- Log Ticket",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [760, 180]
+      "typeVersion": 4,
+      "position": [
+        960,
+        180
+      ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/google/gmail/send",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "to",
-              "value": "={{ $('Webhook — New Support Ticket').item.json.body.from }}"
-            },
-            {
-              "name": "subject",
-              "value": "Re: {{ $('Webhook — New Support Ticket').item.json.body.subject }} [Ticket #{{ $('Airtable — Log Ticket').item.json.id }}]"
-            },
-            {
-              "name": "body",
-              "value": "={{ $('Claude — Draft Response').item.json.response }}"
-            }
-          ]
-        },
+        "sendTo": "={{ $json.from }}",
+        "subject": "=Re: {{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.response }}",
         "options": {}
       },
       "id": "node_gmail_customer",
-      "name": "Gmail — Send to Customer",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [760, 340]
+      "name": "Gmail -- Send to Customer",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        960,
+        340
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail_creds",
+          "name": "Gmail OAuth2"
+        }
+      }
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/google/gmail/send",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "to",
-              "value": "={{ $vars.SUPPORT_ESCALATION_EMAIL }}"
-            },
-            {
-              "name": "subject",
-              "value": "🚨 URGENT TICKET: {{ $('Webhook — New Support Ticket').item.json.body.subject }}"
-            },
-            {
-              "name": "body",
-              "value": "URGENT support ticket requires immediate attention!\n\nFrom: {{ $('Webhook — New Support Ticket').item.json.body.from }}\nSubject: {{ $('Webhook — New Support Ticket').item.json.body.subject }}\nMessage: {{ $('Webhook — New Support Ticket').item.json.body.message }}\n\nAI Classification: {{ $('Claude — Classify Ticket').item.json.category }}\n\nTicket logged in Airtable. Please respond immediately."
-            }
-          ]
-        },
+        "sendTo": "={{ $('Webhook -- New Support Ticket').item.json.body.escalation_email || 'support@company.com' }}",
+        "subject": "=URGENT TICKET: {{ $json.subject }}",
+        "emailType": "text",
+        "message": "=URGENT support ticket requires immediate attention!\n\nFrom: {{ $json.from }}\nSubject: {{ $json.subject }}\nCategory: {{ $json.category }}\n\nAI Draft Response:\n{{ $json.response }}\n\nPlease respond immediately.",
         "options": {}
       },
       "id": "node_gmail_escalate",
-      "name": "Gmail — Escalate to Team",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [760, 500]
+      "name": "Gmail -- Escalate to Team",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        960,
+        500
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail_creds",
+          "name": "Gmail OAuth2"
+        }
+      }
     }
   ],
   "connections": {
-    "Webhook — New Support Ticket": {
+    "Webhook -- New Support Ticket": {
       "main": [
         [
-          { "node": "Claude — Classify Ticket", "type": "main", "index": 0 },
-          { "node": "Claude — Draft Response", "type": "main", "index": 0 }
+          {
+            "node": "Groq -- Classify Ticket",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Groq -- Draft Response",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
-    "Claude — Classify Ticket": {
-      "main": [[{ "node": "Route — Urgent?", "type": "main", "index": 0 }]]
-    },
-    "Claude — Draft Response": {
-      "main": [[{ "node": "Route — Urgent?", "type": "main", "index": 0 }]]
-    },
-    "Route — Urgent?": {
+    "Groq -- Classify Ticket": {
       "main": [
         [
-          { "node": "Airtable — Log Ticket", "type": "main", "index": 0 },
-          { "node": "Gmail — Send to Customer", "type": "main", "index": 0 },
-          { "node": "Gmail — Escalate to Team", "type": "main", "index": 0 }
+          {
+            "node": "Code -- Merge Ticket Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq -- Draft Response": {
+      "main": [
+        [
+          {
+            "node": "Code -- Merge Ticket Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code -- Merge Ticket Data": {
+      "main": [
+        [
+          {
+            "node": "Route -- Urgent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route -- Urgent?": {
+      "main": [
+        [
+          {
+            "node": "Airtable -- Log Ticket",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gmail -- Send to Customer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gmail -- Escalate to Team",
+            "type": "main",
+            "index": 0
+          }
         ],
         [
-          { "node": "Airtable — Log Ticket", "type": "main", "index": 0 },
-          { "node": "Gmail — Send to Customer", "type": "main", "index": 0 }
+          {
+            "node": "Airtable -- Log Ticket",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Gmail -- Send to Customer",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     }
   },
   "active": true,
-  "settings": { "executionOrder": "v1" },
-  "tags": ["support", "tickets", "ai", "gmail", "airtable", "auto-reply"]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "support",
+    "tickets",
+    "ai",
+    "gmail",
+    "airtable",
+    "auto-reply",
+    "groq"
+  ]
 }

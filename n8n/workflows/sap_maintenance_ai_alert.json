@@ -17,7 +17,10 @@
       "name": "Schedule — Every 4 Hours",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [80, 300],
+      "position": [
+        80,
+        300
+      ],
       "notes": "Polls SAP every 4 hours.\nChange hoursInterval to 1 for hourly, or use cronExpression for custom schedule (e.g. '0 6 * * *' for daily 06:00)."
     },
     {
@@ -79,7 +82,10 @@
       "name": "SAP — Fetch High Priority Orders (IW38)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [300, 300],
+      "position": [
+        300,
+        300
+      ],
       "notes": "SAP S/4HANA OData API — API_MAINTORDER_0001\nEquivalent to IW38 transaction filtered by priority.\n\nNOTE: API_MAINTORDER_0001 must be activated on your SAP API Hub account:\n1. Go to https://api.sap.com/api/API_MAINTORDER_0001\n2. Click 'Try Out' tab\n3. Subscribe / Add to your account\n\nFor production SAP: replace sandbox URL with your S/4HANA hostname."
     },
     {
@@ -98,7 +104,10 @@
       "name": "Check — SAP API Success?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [520, 300],
+      "position": [
+        520,
+        300
+      ],
       "notes": "Routes to real SAP data if API returned 200,\nor falls back to mock data if API is not yet activated."
     },
     {
@@ -109,7 +118,10 @@
       "name": "Mock SAP Data — Fallback (Activate API to Remove)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [520, 460],
+      "position": [
+        520,
+        460
+      ],
       "notes": "⚠️ TEMPORARY: Used while SAP API_MAINTORDER_0001 is not yet activated.\nTo activate the real SAP API:\n1. Visit https://api.sap.com/api/API_MAINTORDER_0001/overview\n2. Click 'Add to API Business Hub Enterprise'\n3. Once activated, disable this fallback branch."
     },
     {
@@ -120,7 +132,10 @@
       "name": "Merge — SAP Real or Mock Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [740, 380]
+      "position": [
+        740,
+        380
+      ]
     },
     {
       "parameters": {
@@ -138,7 +153,10 @@
       "name": "Check — Any High Priority Orders?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [960, 300]
+      "position": [
+        960,
+        300
+      ]
     },
     {
       "parameters": {
@@ -148,27 +166,31 @@
       "name": "Code — Format & Build HTML Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1180, 180]
+      "position": [
+        1180,
+        180
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/chat",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
-            {
-              "name": "message",
-              "value": "You are an expert SAP Plant Maintenance (PM) engineer and operations manager with 20+ years of experience. Analyse the following high-priority maintenance orders from SAP IW38 and provide a structured alert report:\n\n**1. EXECUTIVE SUMMARY** (3 sentences — overall risk level, most critical plant/area, immediate danger)\n\n**2. CRITICAL ACTIONS REQUIRED** (ordered bullet list — most urgent first, include specific order numbers)\n\n**3. ORDER-BY-ORDER RISK ASSESSMENT**\nFor each order: | Order# | Risk Level | Root Cause Hypothesis | Recommended Action | Deadline |\n\n**4. RESOURCE MOBILISATION**\n- Which work centers / trades to deploy immediately\n- Spare parts likely needed\n- External contractors required? (Yes/No with reason)\n\n**5. BUSINESS IMPACT FORECAST**\n- Impact if unaddressed within 4 hours\n- Impact if unaddressed within 24 hours\n- Estimated production/safety risk level (Low/Medium/High/Critical)\n\nBe specific, use SAP PM terminology, reference exact order numbers and equipment IDs.\n\n{{ $json.plain_summary }}"
-            }
+            { "name": "Authorization", "value": "=Bearer {{ $json.groq_api_key }}" },
+            { "name": "Content-Type",  "value": "application/json" }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\":\"llama-3.3-70b-versatile\",\"temperature\":0.3,\"max_tokens\":1500,\"messages\":[{\"role\":\"system\",\"content\":\"You are an expert SAP Plant Maintenance (PM) engineer and operations manager with 20+ years of experience. Provide structured, actionable maintenance alert analysis using SAP PM terminology.\"},{\"role\":\"user\",\"content\":\"Analyse these high-priority SAP IW38 maintenance orders and write a structured report:\\n\\n1. EXECUTIVE SUMMARY (3 sentences: overall risk level, most critical plant/area, immediate danger)\\n\\n2. CRITICAL ACTIONS REQUIRED (ordered list, most urgent first, reference specific order numbers)\\n\\n3. ORDER-BY-ORDER RISK ASSESSMENT: For each order - Order# | Risk Level | Root Cause Hypothesis | Recommended Action | Deadline\\n\\n4. RESOURCE MOBILISATION: Work centers to deploy, spare parts needed, external contractors required?\\n\\n5. BUSINESS IMPACT FORECAST: Impact in 4h, impact in 24h, risk level (Low/Medium/High/Critical)\\n\\nReference exact order numbers and equipment IDs throughout.\\n\\n{{ $json.plain_summary }}\"}]}",
+        "options": { "timeout": 60000 }
       },
-      "id": "node_claude_analyse",
-      "name": "Claude AI — SAP PM Expert Analysis",
+      "id": "node_groq_analyse",
+      "name": "Groq AI - SAP PM Expert Analysis",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
+      "typeVersion": 4,
       "position": [1400, 180]
     },
     {
@@ -188,7 +210,7 @@
             },
             {
               "name": "body",
-              "value": "={{ \n'<html><body style=\"font-family:Arial,sans-serif;max-width:1300px;margin:0 auto;padding:0;background:#f0f2f5\">'\n\n+ '<div style=\"background:linear-gradient(135deg,#1a237e 0%,#283593 100%);color:white;padding:24px 30px;border-radius:12px 12px 0 0;margin-bottom:0\">'\n+ '<table width=\"100%\"><tr>'\n+ '<td><h1 style=\"margin:0;font-size:26px;font-weight:700\">🏭 SAP Plant Maintenance Alert</h1>'\n+ '<p style=\"margin:6px 0 0;opacity:0.85;font-size:14px\">IW38 — High Priority Maintenance Orders | Source: API_MAINTORDER_0001</p></td>'\n+ '<td align=\"right\" style=\"font-size:13px;opacity:0.8\">' + $('Code — Format & Build HTML Report').item.json.timestamp + ' PKT</td>'\n+ '</tr></table></div>'\n\n+ '<div style=\"background:' + ($('Code — Format & Build HTML Report').item.json.p1_count > 0 ? '#ffebee' : '#fff8e1') + ';border-left:5px solid ' + ($('Code — Format & Build HTML Report').item.json.p1_count > 0 ? '#c62828' : '#e65100') + ';padding:16px 24px;margin:0\">'\n+ '<strong style=\"font-size:16px\">' + ($('Code — Format & Build HTML Report').item.json.p1_count > 0 ? '🚨 URGENT ACTION REQUIRED' : '⚠️ ATTENTION REQUIRED') + '</strong><br>'\n+ '<span style=\"font-size:14px\">'\n+ '<b>' + $('Code — Format & Build HTML Report').item.json.order_count + ' high-priority orders</b> detected in SAP — '\n+ '<span style=\"color:#c62828\">🔴 P1 Very High: <b>' + $('Code — Format & Build HTML Report').item.json.p1_count + '</b></span> &nbsp;|&nbsp; '\n+ '<span style=\"color:#e65100\">🟠 P2 High: <b>' + $('Code — Format & Build HTML Report').item.json.p2_count + '</b></span>'\n+ '</span></div>'\n\n+ '<div style=\"background:white;padding:24px 30px;border:1px solid #e0e0e0;margin:0\">'\n+ '<h2 style=\"color:#1a237e;font-size:18px;border-bottom:3px solid #1a237e;padding-bottom:8px;margin-top:0\">🤖 AI Analysis & Recommendations</h2>'\n+ '<div style=\"background:#f8f9ff;border:1px solid #e3e7ff;border-radius:8px;padding:20px;white-space:pre-wrap;line-height:1.8;font-size:14px;color:#1a1a2e\">'\n+ $json.response\n+ '</div></div>'\n\n+ '<div style=\"background:white;padding:24px 30px;border:1px solid #e0e0e0;border-top:none;margin:0\">'\n+ '<h2 style=\"color:#1a237e;font-size:18px;border-bottom:3px solid #1a237e;padding-bottom:8px;margin-top:0\">📋 Maintenance Orders — Detail View</h2>'\n+ '<div style=\"overflow-x:auto\">'\n+ $('Code — Format & Build HTML Report').item.json.html_table\n+ '</div></div>'\n\n+ '<div style=\"background:#e8eaf6;padding:14px 24px;border-radius:0 0 12px 12px;border:1px solid #e0e0e0;border-top:none\">'\n+ '<table width=\"100%\"><tr>'\n+ '<td style=\"font-size:12px;color:#555\">'\n+ '<strong>Source:</strong> SAP S/4HANA Sandbox · API_MAINTORDER_0001 OData · IW38 Equivalent<br>'\n+ '<strong>Generated:</strong> ' + $('Code — Format & Build HTML Report').item.json.generated_at + '<br>'\n+ '⚠️ This is an automated alert generated by Enterprise AI Workflow Automation. Do not reply to this email.'\n+ '</td>'\n+ '<td align=\"right\" style=\"font-size:12px;color:#555\">'\n+ 'Filter: MaintPriority eq \\'1\\' or \\'2\\'<br>'\n+ 'Next poll: in 4 hours'\n+ '</td></tr></table></div>'\n\n+ '</body></html>'\n}}"
+              "value": "={{ \n'<html><body style=\"font-family:Arial,sans-serif;max-width:1300px;margin:0 auto;padding:0;background:#f0f2f5\">'\n\n+ '<div style=\"background:linear-gradient(135deg,#1a237e 0%,#283593 100%);color:white;padding:24px 30px;border-radius:12px 12px 0 0;margin-bottom:0\">'\n+ '<table width=\"100%\"><tr>'\n+ '<td><h1 style=\"margin:0;font-size:26px;font-weight:700\">🏭 SAP Plant Maintenance Alert</h1>'\n+ '<p style=\"margin:6px 0 0;opacity:0.85;font-size:14px\">IW38 — High Priority Maintenance Orders | Source: API_MAINTORDER_0001</p></td>'\n+ '<td align=\"right\" style=\"font-size:13px;opacity:0.8\">' + $('Code — Format & Build HTML Report').item.json.timestamp + ' PKT</td>'\n+ '</tr></table></div>'\n\n+ '<div style=\"background:' + ($('Code — Format & Build HTML Report').item.json.p1_count > 0 ? '#ffebee' : '#fff8e1') + ';border-left:5px solid ' + ($('Code — Format & Build HTML Report').item.json.p1_count > 0 ? '#c62828' : '#e65100') + ';padding:16px 24px;margin:0\">'\n+ '<strong style=\"font-size:16px\">' + ($('Code — Format & Build HTML Report').item.json.p1_count > 0 ? '🚨 URGENT ACTION REQUIRED' : '⚠️ ATTENTION REQUIRED') + '</strong><br>'\n+ '<span style=\"font-size:14px\">'\n+ '<b>' + $('Code — Format & Build HTML Report').item.json.order_count + ' high-priority orders</b> detected in SAP — '\n+ '<span style=\"color:#c62828\">🔴 P1 Very High: <b>' + $('Code — Format & Build HTML Report').item.json.p1_count + '</b></span> &nbsp;|&nbsp; '\n+ '<span style=\"color:#e65100\">🟠 P2 High: <b>' + $('Code — Format & Build HTML Report').item.json.p2_count + '</b></span>'\n+ '</span></div>'\n\n+ '<div style=\"background:white;padding:24px 30px;border:1px solid #e0e0e0;margin:0\">'\n+ '<h2 style=\"color:#1a237e;font-size:18px;border-bottom:3px solid #1a237e;padding-bottom:8px;margin-top:0\">🤖 AI Analysis & Recommendations</h2>'\n+ '<div style=\"background:#f8f9ff;border:1px solid #e3e7ff;border-radius:8px;padding:20px;white-space:pre-wrap;line-height:1.8;font-size:14px;color:#1a1a2e\">'\n+ $json.choices[0].message.content\n+ '</div></div>'\n\n+ '<div style=\"background:white;padding:24px 30px;border:1px solid #e0e0e0;border-top:none;margin:0\">'\n+ '<h2 style=\"color:#1a237e;font-size:18px;border-bottom:3px solid #1a237e;padding-bottom:8px;margin-top:0\">📋 Maintenance Orders — Detail View</h2>'\n+ '<div style=\"overflow-x:auto\">'\n+ $('Code — Format & Build HTML Report').item.json.html_table\n+ '</div></div>'\n\n+ '<div style=\"background:#e8eaf6;padding:14px 24px;border-radius:0 0 12px 12px;border:1px solid #e0e0e0;border-top:none\">'\n+ '<table width=\"100%\"><tr>'\n+ '<td style=\"font-size:12px;color:#555\">'\n+ '<strong>Source:</strong> SAP S/4HANA Sandbox · API_MAINTORDER_0001 OData · IW38 Equivalent<br>'\n+ '<strong>Generated:</strong> ' + $('Code — Format & Build HTML Report').item.json.generated_at + '<br>'\n+ '⚠️ This is an automated alert generated by Enterprise AI Workflow Automation. Do not reply to this email.'\n+ '</td>'\n+ '<td align=\"right\" style=\"font-size:12px;color:#555\">'\n+ 'Filter: MaintPriority eq \\'1\\' or \\'2\\'<br>'\n+ 'Next poll: in 4 hours'\n+ '</td></tr></table></div>'\n\n+ '</body></html>'\n}}"
             },
             {
               "name": "isHtml",
@@ -202,12 +224,15 @@
       "name": "Gmail — Send Alert to pinkpearl918@gmail.com",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1620, 140]
+      "position": [
+        1620,
+        140
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/airtable/bases/{{ $vars.AIRTABLE_BASE_ID }}/tables/SAP_Maintenance_Alerts/records",
+        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/airtable/tables/SAP_Maintenance_Alerts/records",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -220,7 +245,7 @@
                 "P2 Count": "={{ $('Code — Format & Build HTML Report').item.json.p2_count }}",
                 "Order Numbers": "={{ $('Code — Format & Build HTML Report').item.json.orders.map(o => o.MaintenanceOrder).join(', ') }}",
                 "Plants": "={{ [...new Set($('Code — Format & Build HTML Report').item.json.orders.map(o => o.MaintPlant))].join(', ') }}",
-                "AI Analysis": "={{ $('Claude AI — SAP PM Expert Analysis').item.json.response.substring(0, 1000) }}",
+                "AI Analysis": "={{ $('Groq AI - SAP PM Expert Analysis').item.json.choices[0].message.content.substring(0, 1000) }}",
                 "Alert Level": "={{ $('Code — Format & Build HTML Report').item.json.p1_count > 0 ? 'URGENT' : 'ALERT' }}",
                 "Email Sent To": "pinkpearl918@gmail.com"
               }
@@ -233,7 +258,10 @@
       "name": "Airtable — Log to SAP_Maintenance_Alerts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1620, 320]
+      "position": [
+        1620,
+        320
+      ]
     },
     {
       "parameters": {},
@@ -241,43 +269,120 @@
       "name": "No Action — No High Priority Orders",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1180, 420],
+      "position": [
+        1180,
+        420
+      ],
       "notes": "Workflow ends silently — no email sent when no P1/P2 orders exist."
     }
   ],
   "connections": {
     "Schedule — Every 4 Hours": {
-      "main": [[{ "node": "SAP — Fetch High Priority Orders (IW38)", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "SAP — Fetch High Priority Orders (IW38)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "SAP — Fetch High Priority Orders (IW38)": {
-      "main": [[{ "node": "Check — SAP API Success?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Check — SAP API Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Check — SAP API Success?": {
       "main": [
-        [{ "node": "Merge — SAP Real or Mock Data", "type": "main", "index": 0 }],
-        [{ "node": "Mock SAP Data — Fallback (Activate API to Remove)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Merge — SAP Real or Mock Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mock SAP Data — Fallback (Activate API to Remove)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Mock SAP Data — Fallback (Activate API to Remove)": {
-      "main": [[{ "node": "Merge — SAP Real or Mock Data", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Merge — SAP Real or Mock Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Merge — SAP Real or Mock Data": {
-      "main": [[{ "node": "Check — Any High Priority Orders?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Check — Any High Priority Orders?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Check — Any High Priority Orders?": {
       "main": [
-        [{ "node": "Code — Format & Build HTML Report", "type": "main", "index": 0 }],
-        [{ "node": "No Action — No High Priority Orders", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Code — Format & Build HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Action — No High Priority Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Code — Format & Build HTML Report": {
-      "main": [[{ "node": "Claude AI — SAP PM Expert Analysis", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Groq AI - SAP PM Expert Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Claude AI — SAP PM Expert Analysis": {
-      "main": [[
-        { "node": "Gmail — Send Alert to pinkpearl918@gmail.com", "type": "main", "index": 0 },
-        { "node": "Airtable — Log to SAP_Maintenance_Alerts", "type": "main", "index": 0 }
-      ]]
+    "Groq AI - SAP PM Expert Analysis": {
+      "main": [
+        [
+          {
+            "node": "Gmail — Send Alert to pinkpearl918@gmail.com",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Airtable — Log to SAP_Maintenance_Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": false,
@@ -286,7 +391,15 @@
     "saveManualExecutions": true,
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "tags": ["sap", "plant-maintenance", "iw38", "ai-alert", "email", "airtable"],
+  "tags": [
+    "sap",
+    "plant-maintenance",
+    "iw38",
+    "ai-alert",
+    "email",
+    "airtable",
+    "groq"
+  ],
   "meta": {
     "description": "SAP IW38 equivalent: polls API_MAINTORDER_0001 every 4h for Priority 1+2 orders. Falls back to realistic mock data while SAP UCON is not activated. Claude AI analyses as PM expert. Sends rich HTML alert to pinkpearl918@gmail.com and logs to Airtable."
   }

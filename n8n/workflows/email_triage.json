@@ -9,29 +9,59 @@
         "options": {}
       },
       "id": "node_webhook_trigger",
-      "name": "Webhook — New Email",
+      "name": "Webhook -- New Email",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [100, 300]
+      "position": [
+        100,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/classify",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
-            { "name": "text", "value": "={{ $json.body.email_body }}" },
-            { "name": "categories", "value": ["Sales Inquiry", "Support Request", "Finance", "HR", "Spam", "Other"] }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.groq_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\": \"llama-3.3-70b-versatile\", \"temperature\": 0.3, \"max_tokens\": 1024, \"messages\": [{\"role\": \"system\", \"content\": \"You are an email classification assistant. Classify emails into exactly one category from the list provided.\"}, {\"role\": \"user\", \"content\": \"Classify this email into exactly one of: Sales Inquiry, Support Request, Finance, HR, Spam, Other.\\n\\nEmail body:\\n{{ $json.body.email_body }}\\n\\nRespond with ONLY valid JSON: {\\\"category\\\": \\\"<chosen category>\\\"}\"}]}",
+        "options": {
+          "timeout": 60000
+        }
       },
-      "id": "node_claude_classify",
-      "name": "Claude — Classify Email",
+      "id": "node_groq_classify",
+      "name": "Groq -- Classify Email",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [300, 300]
+      "typeVersion": 4,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json?.choices?.[0]?.message?.content || '{\"category\":\"Other\"}';\nlet category = 'Other';\ntry { category = JSON.parse(raw.match(/\\{[^}]+\\}/)[0]).category; } catch(e) {}\nreturn [{ json: { ...($('Webhook -- New Email').item.json.body || {}), category } }];"
+      },
+      "id": "node_parse_classify",
+      "name": "Code -- Parse Classification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
@@ -46,73 +76,139 @@
         }
       },
       "id": "node_route_sales",
-      "name": "Route — Sales?",
+      "name": "Route -- Sales?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [500, 300]
+      "position": [
+        700,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/airtable/bases/{{ $vars.AIRTABLE_BASE_ID }}/tables/Leads/records",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "=https://api.airtable.com/v0/{{ $json.airtable_base_id }}/Leads",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "fields",
-              "value": {
-                "Email": "={{ $('Webhook — New Email').item.json.body.from }}",
-                "Subject": "={{ $('Webhook — New Email').item.json.body.subject }}",
-                "Category": "={{ $('Claude — Classify Email').item.json.category }}",
-                "Status": "New"
-              }
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.airtable_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"records\":[{\"fields\":{\"Email\":\"{{ $('Webhook -- New Email').item.json.body.from }}\",\"Subject\":\"{{ $('Webhook -- New Email').item.json.body.subject }}\",\"Category\":\"{{ $('Code -- Parse Classification').item.json.category }}\",\"Status\":\"New\"}}]}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       },
       "id": "node_airtable_crm",
-      "name": "Airtable — Add to CRM",
+      "name": "Airtable -- Add to CRM",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [700, 200]
+      "typeVersion": 4,
+      "position": [
+        900,
+        200
+      ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/google/gmail/send",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            { "name": "to", "value": "={{ $('Webhook — New Email').item.json.body.from }}" },
-            { "name": "subject", "value": "Re: {{ $('Webhook — New Email').item.json.body.subject }}" },
-            { "name": "body", "value": "Thank you for your inquiry. Our sales team will be in touch within 24 hours." }
-          ]
-        },
+        "sendTo": "={{ $('Webhook -- New Email').item.json.body.from }}",
+        "subject": "=Re: {{ $('Webhook -- New Email').item.json.body.subject }}",
+        "emailType": "text",
+        "message": "Thank you for your inquiry. Our sales team will be in touch within 24 hours.",
         "options": {}
       },
       "id": "node_gmail_reply",
-      "name": "Gmail — Auto Reply",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [700, 400]
+      "name": "Gmail -- Auto Reply",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        900,
+        400
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail_creds",
+          "name": "Gmail OAuth2"
+        }
+      }
     }
   ],
   "connections": {
-    "Webhook — New Email": {
-      "main": [[{ "node": "Claude — Classify Email", "type": "main", "index": 0 }]]
-    },
-    "Claude — Classify Email": {
-      "main": [[{ "node": "Route — Sales?", "type": "main", "index": 0 }]]
-    },
-    "Route — Sales?": {
+    "Webhook -- New Email": {
       "main": [
-        [{ "node": "Airtable — Add to CRM", "type": "main", "index": 0 }],
-        [{ "node": "Gmail — Auto Reply", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Groq -- Classify Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq -- Classify Email": {
+      "main": [
+        [
+          {
+            "node": "Code -- Parse Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code -- Parse Classification": {
+      "main": [
+        [
+          {
+            "node": "Route -- Sales?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route -- Sales?": {
+      "main": [
+        [
+          {
+            "node": "Airtable -- Add to CRM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail -- Auto Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
   "active": true,
-  "settings": { "executionOrder": "v1" },
-  "tags": ["email", "ai", "crm"]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "email",
+    "ai",
+    "crm",
+    "groq"
+  ],
+  "meta": {
+    "description": "Webhook-triggered email triage. Groq classifies the email, routes Sales to Airtable CRM and auto-replies via Gmail. Free-plan compatible — fill groq_api_key, airtable_token, airtable_base_id directly in the Config Set node if combining with other workflows, or hardcode in HTTP headers."
+  }
 }

@@ -9,86 +9,127 @@
         "options": {}
       },
       "id": "node_meeting_trigger",
-      "name": "Webhook — Schedule Request",
+      "name": "Webhook -- Schedule Request",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [100, 300]
+      "position": [
+        100,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/extract",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
-            { "name": "text", "value": "={{ $json.body.request_text }}" },
-            { "name": "fields", "value": ["meeting_title", "participants", "preferred_date", "duration_minutes", "agenda"] }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.groq_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\": \"llama-3.3-70b-versatile\", \"temperature\": 0.3, \"max_tokens\": 1024, \"messages\": [{\"role\": \"system\", \"content\": \"You are a scheduling assistant. Extract meeting details from natural language requests.\"}, {\"role\": \"user\", \"content\": \"Extract: meeting_title, participants (array of names/emails), preferred_date (ISO 8601 datetime), duration_minutes (number), agenda.\\n\\nRequest:\\n{{ $json.body.request_text }}\\n\\nRespond with ONLY valid JSON: {\\\"fields\\\":{\\\"meeting_title\\\":\\\"\\\",\\\"participants\\\":[],\\\"preferred_date\\\":\\\"\\\",\\\"duration_minutes\\\":60,\\\"agenda\\\":\\\"\\\"}}\"}]}",
+        "options": {
+          "timeout": 60000
+        }
       },
-      "id": "node_parse_request",
-      "name": "Claude — Parse Meeting Request",
+      "id": "node_groq_parse",
+      "name": "Groq -- Parse Meeting Request",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [300, 300]
+      "typeVersion": 4,
+      "position": [
+        300,
+        300
+      ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/google/calendar/events",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            { "name": "summary", "value": "={{ $json.fields.meeting_title }}" },
-            { "name": "start", "value": "={{ $json.fields.preferred_date }}" },
-            { "name": "end", "value": "={{ $json.fields.preferred_date }}" },
-            { "name": "attendees", "value": "={{ $json.fields.participants }}" },
-            { "name": "description", "value": "={{ $json.fields.agenda }}" }
-          ]
-        },
-        "options": {}
+        "jsCode": "const raw = $input.item.json?.choices?.[0]?.message?.content || '{\"fields\":{}}';\nlet fields = {};\ntry { const m = raw.match(/\\{[\\s\\S]*\\}/); if(m) fields = JSON.parse(m[0]).fields || {}; } catch(e) {}\nconst webhook = $('Webhook -- Schedule Request').item.json;\nreturn [{ json: { fields, requester_email: webhook.body?.requester_email || '' } }];"
       },
-      "id": "node_create_event",
-      "name": "Google Calendar — Create Event",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [500, 300]
+      "id": "node_parse_meeting",
+      "name": "Code -- Parse Meeting Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/google/gmail/send",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            { "name": "to", "value": "={{ $json.body.requester_email }}" },
-            { "name": "subject", "value": "✅ Meeting Scheduled: {{ $('Claude — Parse Meeting Request').item.json.fields.meeting_title }}" },
-            { "name": "body", "value": "Your meeting has been scheduled. Calendar invites have been sent to all participants." },
-            { "name": "html", "value": false }
-          ]
-        },
+        "sendTo": "={{ $json.requester_email }}",
+        "subject": "=Meeting Scheduled: {{ $json.fields.meeting_title }}",
+        "emailType": "text",
+        "message": "=Your meeting '{{ $json.fields.meeting_title }}' has been scheduled.\n\nDate/Time: {{ $json.fields.preferred_date }}\nDuration: {{ $json.fields.duration_minutes }} minutes\nParticipants: {{ $json.fields.participants }}\nAgenda: {{ $json.fields.agenda }}\n\nCalendar invites will be sent to all participants.",
         "options": {}
       },
       "id": "node_confirm_email",
-      "name": "Gmail — Send Confirmation",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [700, 300]
+      "name": "Gmail -- Send Confirmation",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail_creds",
+          "name": "Gmail OAuth2"
+        }
+      }
     }
   ],
   "connections": {
-    "Webhook — Schedule Request": {
-      "main": [[{ "node": "Claude — Parse Meeting Request", "type": "main", "index": 0 }]]
+    "Webhook -- Schedule Request": {
+      "main": [
+        [
+          {
+            "node": "Groq -- Parse Meeting Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Claude — Parse Meeting Request": {
-      "main": [[{ "node": "Google Calendar — Create Event", "type": "main", "index": 0 }]]
+    "Groq -- Parse Meeting Request": {
+      "main": [
+        [
+          {
+            "node": "Code -- Parse Meeting Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Google Calendar — Create Event": {
-      "main": [[{ "node": "Gmail — Send Confirmation", "type": "main", "index": 0 }]]
+    "Code -- Parse Meeting Fields": {
+      "main": [
+        [
+          {
+            "node": "Gmail -- Send Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
-  "settings": { "executionOrder": "v1" },
-  "tags": ["calendar", "scheduling", "ai"]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "calendar",
+    "scheduling",
+    "ai",
+    "groq"
+  ]
 }

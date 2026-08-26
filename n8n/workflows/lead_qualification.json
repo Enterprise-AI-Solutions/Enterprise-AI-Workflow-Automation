@@ -9,67 +9,99 @@
         "options": {}
       },
       "id": "node_webhook_lead",
-      "name": "Webhook — New Lead",
+      "name": "Webhook -- New Lead",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [100, 300]
+      "position": [
+        100,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/extract",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "text",
-              "value": "={{ $json.body.message }}"
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.groq_api_key }}"
             },
             {
-              "name": "fields",
-              "value": ["company_name", "company_size", "industry", "use_case", "budget_range", "urgency"]
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\": \"llama-3.3-70b-versatile\", \"temperature\": 0.3, \"max_tokens\": 1024, \"messages\": [{\"role\": \"system\", \"content\": \"You are a CRM data extraction assistant. Extract structured lead information from messages.\"}, {\"role\": \"user\", \"content\": \"Extract: company_name, company_size, industry, use_case, budget_range, urgency.\\n\\nMessage:\\n{{ $json.body.message }}\\n\\nRespond with ONLY valid JSON with those exact keys.\"}]}",
+        "options": {
+          "timeout": 60000
+        }
       },
-      "id": "node_claude_extract",
-      "name": "Claude — Extract Lead Fields",
+      "id": "node_groq_extract",
+      "name": "Groq -- Extract Lead Fields",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [300, 300]
+      "typeVersion": 4,
+      "position": [
+        300,
+        200
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/classify",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "text",
-              "value": "={{ $json.body.message }}"
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.groq_api_key }}"
             },
             {
-              "name": "categories",
-              "value": ["Hot Lead", "Warm Lead", "Cold Lead", "Not a Fit"]
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\": \"llama-3.3-70b-versatile\", \"temperature\": 0.3, \"max_tokens\": 1024, \"messages\": [{\"role\": \"system\", \"content\": \"You are a sales lead qualification assistant.\"}, {\"role\": \"user\", \"content\": \"Classify this lead into exactly one category: Hot Lead, Warm Lead, Cold Lead, Not a Fit.\\n\\nMessage:\\n{{ $json.body.message }}\\n\\nRespond with ONLY valid JSON: {\\\"category\\\": \\\"<chosen category>\\\"}\"}]}",
+        "options": {
+          "timeout": 60000
+        }
       },
-      "id": "node_claude_score",
-      "name": "Claude — Score Lead",
+      "id": "node_groq_score",
+      "name": "Groq -- Score Lead",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [300, 460]
+      "typeVersion": 4,
+      "position": [
+        300,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const extractRaw = $('Groq -- Extract Lead Fields').item.json?.choices?.[0]?.message?.content || '{}';\nconst scoreRaw   = $('Groq -- Score Lead').item.json?.choices?.[0]?.message?.content || '{\"category\":\"Cold Lead\"}';\nlet extracted = {}, score = 'Cold Lead';\ntry { const m = extractRaw.match(/\\{[\\s\\S]*\\}/); if(m) extracted = JSON.parse(m[0]); } catch(e){}\ntry { const m = scoreRaw.match(/\\{[^}]+\\}/);   if(m) score = JSON.parse(m[0]).category; } catch(e){}\nreturn [{ json: { ...extracted, category: score } }];"
+      },
+      "id": "node_merge_lead",
+      "name": "Code -- Merge Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        300
+      ]
     },
     {
       "parameters": {
         "conditions": {
           "string": [
             {
-              "value1": "={{ $('Claude — Score Lead').item.json.category }}",
+              "value1": "={{ $json.category }}",
               "operation": "equals",
               "value2": "Hot Lead"
             }
@@ -77,99 +109,165 @@
         }
       },
       "id": "node_route_hot",
-      "name": "Route — Hot Lead?",
+      "name": "Route -- Hot Lead?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [540, 380]
+      "position": [
+        740,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/airtable/bases/{{ $vars.AIRTABLE_BASE_ID }}/tables/Leads/records",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "=https://api.airtable.com/v0/{{ $('Webhook -- New Lead').item.json.body.airtable_base_id || 'YOUR_BASE_ID' }}/Leads",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "fields",
-              "value": {
-                "Source": "n8n-webhook",
-                "Company": "={{ $('Claude — Extract Lead Fields').item.json.company_name }}",
-                "Industry": "={{ $('Claude — Extract Lead Fields').item.json.industry }}",
-                "Company Size": "={{ $('Claude — Extract Lead Fields').item.json.company_size }}",
-                "Use Case": "={{ $('Claude — Extract Lead Fields').item.json.use_case }}",
-                "Budget": "={{ $('Claude — Extract Lead Fields').item.json.budget_range }}",
-                "Score": "={{ $('Claude — Score Lead').item.json.category }}",
-                "Urgency": "={{ $('Claude — Extract Lead Fields').item.json.urgency }}",
-                "Status": "New",
-                "Created": "={{ $now }}"
-              }
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Webhook -- New Lead').item.json.body.airtable_token || 'YOUR_TOKEN' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"records\":[{\"fields\":{\"Source\":\"n8n-webhook\",\"Company\":\"{{ $json.company_name }}\",\"Industry\":\"{{ $json.industry }}\",\"Company Size\":\"{{ $json.company_size }}\",\"Use Case\":\"{{ $json.use_case }}\",\"Budget\":\"{{ $json.budget_range }}\",\"Score\":\"{{ $json.category }}\",\"Urgency\":\"{{ $json.urgency }}\",\"Status\":\"New\"}}]}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
       },
       "id": "node_airtable_crm",
-      "name": "Airtable — Log to CRM",
+      "name": "Airtable -- Log to CRM",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [760, 260]
+      "typeVersion": 4,
+      "position": [
+        960,
+        200
+      ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/google/gmail/send",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "to",
-              "value": "={{ $vars.SALES_TEAM_EMAIL }}"
-            },
-            {
-              "name": "subject",
-              "value": "🔥 Hot Lead: {{ $('Claude — Extract Lead Fields').item.json.company_name }}"
-            },
-            {
-              "name": "body",
-              "value": "A hot lead just came in!\n\nCompany: {{ $('Claude — Extract Lead Fields').item.json.company_name }}\nIndustry: {{ $('Claude — Extract Lead Fields').item.json.industry }}\nBudget: {{ $('Claude — Extract Lead Fields').item.json.budget_range }}\nUse Case: {{ $('Claude — Extract Lead Fields').item.json.use_case }}\n\nCheck Airtable for full details."
-            }
-          ]
-        },
+        "sendTo": "={{ $('Webhook -- New Lead').item.json.body.sales_team_email || 'sales@company.com' }}",
+        "subject": "=Hot Lead: {{ $json.company_name }}",
+        "emailType": "text",
+        "message": "=A hot lead just came in!\n\nCompany: {{ $json.company_name }}\nIndustry: {{ $json.industry }}\nBudget: {{ $json.budget_range }}\nUse Case: {{ $json.use_case }}\nUrgency: {{ $json.urgency }}\n\nCheck Airtable for full details.",
         "options": {}
       },
       "id": "node_gmail_alert",
-      "name": "Gmail — Alert Sales Team",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [760, 440]
+      "name": "Gmail -- Alert Sales Team",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        960,
+        420
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail_creds",
+          "name": "Gmail OAuth2"
+        }
+      }
     }
   ],
   "connections": {
-    "Webhook — New Lead": {
+    "Webhook -- New Lead": {
       "main": [
         [
-          { "node": "Claude — Extract Lead Fields", "type": "main", "index": 0 },
-          { "node": "Claude — Score Lead", "type": "main", "index": 0 }
+          {
+            "node": "Groq -- Extract Lead Fields",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Groq -- Score Lead",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
-    "Claude — Extract Lead Fields": {
-      "main": [[{ "node": "Route — Hot Lead?", "type": "main", "index": 0 }]]
-    },
-    "Claude — Score Lead": {
-      "main": [[{ "node": "Route — Hot Lead?", "type": "main", "index": 0 }]]
-    },
-    "Route — Hot Lead?": {
+    "Groq -- Extract Lead Fields": {
       "main": [
-        [{ "node": "Airtable — Log to CRM", "type": "main", "index": 0 }],
-        [{ "node": "Gmail — Alert Sales Team", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Code -- Merge Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
-    "Airtable — Log to CRM": {
-      "main": [[{ "node": "Gmail — Alert Sales Team", "type": "main", "index": 0 }]]
+    "Groq -- Score Lead": {
+      "main": [
+        [
+          {
+            "node": "Code -- Merge Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code -- Merge Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Route -- Hot Lead?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route -- Hot Lead?": {
+      "main": [
+        [
+          {
+            "node": "Airtable -- Log to CRM",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail -- Alert Sales Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable -- Log to CRM": {
+      "main": [
+        [
+          {
+            "node": "Gmail -- Alert Sales Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
-  "settings": { "executionOrder": "v1" },
-  "tags": ["leads", "crm", "ai", "airtable", "gmail"]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "leads",
+    "crm",
+    "ai",
+    "airtable",
+    "gmail",
+    "groq"
+  ]
 }

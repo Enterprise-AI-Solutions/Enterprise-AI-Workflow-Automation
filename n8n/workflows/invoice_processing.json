@@ -9,90 +9,175 @@
         "options": {}
       },
       "id": "node_invoice_trigger",
-      "name": "Webhook — Invoice Upload",
+      "name": "Webhook -- Invoice Upload",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [100, 300]
+      "position": [
+        100,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/extract",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            { "name": "text", "value": "={{ $json.body.invoice_text }}" },
-            { "name": "fields", "value": ["invoice_number", "vendor", "amount", "due_date", "line_items"] }
-          ]
-        },
-        "options": {}
-      },
-      "id": "node_extract_fields",
-      "name": "Claude — Extract Invoice Fields",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [300, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/airtable/bases/{{ $vars.AIRTABLE_BASE_ID }}/tables/Invoices/records",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
             {
-              "name": "fields",
-              "value": {
-                "Invoice Number": "={{ $json.fields.invoice_number }}",
-                "Vendor": "={{ $json.fields.vendor }}",
-                "Amount": "={{ $json.fields.amount }}",
-                "Due Date": "={{ $json.fields.due_date }}",
-                "Status": "Pending Review"
-              }
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.groq_api_key }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
             }
           ]
         },
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"model\": \"llama-3.3-70b-versatile\", \"temperature\": 0.3, \"max_tokens\": 1024, \"messages\": [{\"role\": \"system\", \"content\": \"You are an invoice data extraction assistant. Extract structured fields from invoice text.\"}, {\"role\": \"user\", \"content\": \"Extract these fields from the invoice: invoice_number, vendor, amount, due_date, line_items.\\n\\nInvoice text:\\n{{ $json.body.invoice_text }}\\n\\nRespond with ONLY valid JSON: {\\\"fields\\\":{\\\"invoice_number\\\":\\\"\\\",\\\"vendor\\\":\\\"\\\",\\\"amount\\\":\\\"\\\",\\\"due_date\\\":\\\"\\\",\\\"line_items\\\":[]}}\"}]}",
+        "options": {
+          "timeout": 60000
+        }
       },
-      "id": "node_airtable_invoices",
-      "name": "Airtable — Log Invoice",
+      "id": "node_groq_extract",
+      "name": "Groq -- Extract Invoice Fields",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [500, 300]
+      "typeVersion": 4,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.item.json?.choices?.[0]?.message?.content || '{\"fields\":{}}';\nlet fields = {};\ntry { const m = raw.match(/\\{[\\s\\S]*\\}/); if(m) fields = JSON.parse(m[0]).fields || {}; } catch(e) {}\nreturn [{ json: { fields } }];"
+      },
+      "id": "node_parse_invoice",
+      "name": "Code -- Parse Invoice Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/google/gmail/send",
-        "sendBody": true,
-        "bodyParameters": {
+        "url": "=https://api.airtable.com/v0/{{ $('Webhook -- Invoice Upload').item.json.body.airtable_base_id || 'YOUR_BASE_ID' }}/Invoices",
+        "sendHeaders": true,
+        "headerParameters": {
           "parameters": [
-            { "name": "to", "value": "finance@company.com" },
-            { "name": "subject", "value": "New Invoice Received — {{ $('Claude — Extract Invoice Fields').item.json.fields.invoice_number }}" },
-            { "name": "body", "value": "Invoice from {{ $('Claude — Extract Invoice Fields').item.json.fields.vendor }} for {{ $('Claude — Extract Invoice Fields').item.json.fields.amount }} has been logged in Airtable." }
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $('Webhook -- Invoice Upload').item.json.body.airtable_token || 'YOUR_TOKEN' }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
           ]
         },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"records\":[{\"fields\":{\"Invoice Number\":\"{{ $json.fields.invoice_number }}\",\"Vendor\":\"{{ $json.fields.vendor }}\",\"Amount\":\"{{ $json.fields.amount }}\",\"Due Date\":\"{{ $json.fields.due_date }}\",\"Status\":\"Pending Review\"}}]}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "node_airtable_invoices",
+      "name": "Airtable -- Log Invoice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "finance@company.com",
+        "subject": "=New Invoice Received -- {{ $('Code -- Parse Invoice Fields').item.json.fields.invoice_number }}",
+        "emailType": "text",
+        "message": "=Invoice from {{ $('Code -- Parse Invoice Fields').item.json.fields.vendor }} for {{ $('Code -- Parse Invoice Fields').item.json.fields.amount }} has been logged in Airtable for review.",
         "options": {}
       },
       "id": "node_notify_finance",
-      "name": "Gmail — Notify Finance",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [700, 300]
+      "name": "Gmail -- Notify Finance",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gmail_creds",
+          "name": "Gmail OAuth2"
+        }
+      }
     }
   ],
   "connections": {
-    "Webhook — Invoice Upload": {
-      "main": [[{ "node": "Claude — Extract Invoice Fields", "type": "main", "index": 0 }]]
+    "Webhook -- Invoice Upload": {
+      "main": [
+        [
+          {
+            "node": "Groq -- Extract Invoice Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Claude — Extract Invoice Fields": {
-      "main": [[{ "node": "Airtable — Log Invoice", "type": "main", "index": 0 }]]
+    "Groq -- Extract Invoice Fields": {
+      "main": [
+        [
+          {
+            "node": "Code -- Parse Invoice Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Airtable — Log Invoice": {
-      "main": [[{ "node": "Gmail — Notify Finance", "type": "main", "index": 0 }]]
+    "Code -- Parse Invoice Fields": {
+      "main": [
+        [
+          {
+            "node": "Airtable -- Log Invoice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable -- Log Invoice": {
+      "main": [
+        [
+          {
+            "node": "Gmail -- Notify Finance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
-  "settings": { "executionOrder": "v1" },
-  "tags": ["finance", "invoice", "ai"]
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "finance",
+    "invoice",
+    "ai",
+    "groq"
+  ]
 }
