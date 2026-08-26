@@ -38,8 +38,8 @@
             },
             {
               "id": "cfg_3",
-              "name": "anthropic_key",
-              "value": "PASTE_YOUR_CLAUDE_API_KEY_HERE",
+              "name": "groq_api_key",
+              "value": "PASTE_YOUR_GROQ_API_KEY_HERE (free at console.groq.com)",
               "type": "string"
             },
             {
@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const now = new Date();\nconst yesterday = new Date(now);\nyesterday.setDate(yesterday.getDate() - 1);\nyesterday.setHours(0, 0, 0, 0);\n\nconst cfg = $input.item.json;\n\nreturn [{\n  json: {\n    ...cfg,\n    yesterday_str:  yesterday.toISOString().split('T')[0],\n    today_str:      now.toISOString().split('T')[0],\n    timestamp:      now.toISOString(),\n    readable_date:  now.toLocaleDateString('en-US', {\n                      weekday:'long', year:'numeric',\n                      month:'long', day:'numeric'\n                    })\n  }\n}];"
+        "jsCode": "const now = new Date();\nconst yesterday = new Date(now);\nyesterday.setDate(yesterday.getDate() - 1);\nyesterday.setHours(0, 0, 0, 0);\n\nconst cfg = $input.item.json;\n\nreturn [{\n  json: {\n    ...cfg,\n    yesterday_str: yesterday.toISOString().split('T')[0],\n    today_str:     now.toISOString().split('T')[0],\n    timestamp:     now.toISOString(),\n    readable_date: now.toLocaleDateString('en-US', {\n      weekday:'long', year:'numeric', month:'long', day:'numeric'\n    })\n  }\n}];"
       },
       "id": "node_dates",
       "name": "Code — Build Date Range",
@@ -96,18 +96,9 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            {
-              "name": "maxRecords",
-              "value": "50"
-            },
-            {
-              "name": "sort[0][field]",
-              "value": "Created At"
-            },
-            {
-              "name": "sort[0][direction]",
-              "value": "desc"
-            }
+            { "name": "maxRecords", "value": "50" },
+            { "name": "sort[0][field]", "value": "Created At" },
+            { "name": "sort[0][direction]", "value": "desc" }
           ]
         },
         "options": {
@@ -123,7 +114,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Carry config forward + store execution data\nconst cfg        = $('Code — Build Date Range').item.json;\nconst execResp   = $input.item.json;\nconst execRecords = execResp?.records || [];\n\nreturn [{\n  json: {\n    ...cfg,\n    exec_records:   execRecords,\n    exec_count:     execRecords.length,\n    exec_fetch_ok:  !execResp.error\n  }\n}];"
+        "jsCode": "const cfg        = $('Code — Build Date Range').item.json;\nconst execResp   = $input.item.json;\nconst execRecords = execResp?.records || [];\n\nreturn [{\n  json: {\n    ...cfg,\n    exec_records:  execRecords,\n    exec_count:    execRecords.length,\n    exec_fetch_ok: !execResp.error\n  }\n}];"
       },
       "id": "node_store_exec",
       "name": "Code — Store Execution Data",
@@ -147,18 +138,9 @@
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
-            {
-              "name": "maxRecords",
-              "value": "50"
-            },
-            {
-              "name": "sort[0][field]",
-              "value": "Created At"
-            },
-            {
-              "name": "sort[0][direction]",
-              "value": "desc"
-            }
+            { "name": "maxRecords", "value": "50" },
+            { "name": "sort[0][field]", "value": "Created At" },
+            { "name": "sort[0][direction]", "value": "desc" }
           ]
         },
         "options": {
@@ -174,7 +156,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Carry everything forward + store leads data\nconst prev        = $('Code — Store Execution Data').item.json;\nconst leadsResp   = $input.item.json;\nconst leadRecords  = leadsResp?.records || [];\n\nconst hotLeads = leadRecords.filter(r => {\n  const score = String(\n    r.fields?.Score || r.fields?.Status ||\n    r.fields?.Priority || r.fields?.score || ''\n  ).toLowerCase();\n  return score.includes('hot') || score.includes('high') || score.includes('qualified');\n}).length;\n\nreturn [{\n  json: {\n    ...prev,\n    lead_records:    leadRecords,\n    new_leads:       leadRecords.length,\n    hot_leads:       hotLeads,\n    leads_fetch_ok:  !leadsResp.error\n  }\n}];"
+        "jsCode": "const prev       = $('Code — Store Execution Data').item.json;\nconst leadsResp  = $input.item.json;\nconst leadRecords = leadsResp?.records || [];\n\nconst hotLeads = leadRecords.filter(r => {\n  const score = String(\n    r.fields?.Score || r.fields?.Status ||\n    r.fields?.Priority || r.fields?.score || ''\n  ).toLowerCase();\n  return score.includes('hot') || score.includes('high') || score.includes('qualified');\n}).length;\n\nreturn [{\n  json: {\n    ...prev,\n    lead_records:   leadRecords,\n    new_leads:      leadRecords.length,\n    hot_leads:      hotLeads,\n    leads_fetch_ok: !leadsResp.error\n  }\n}];"
       },
       "id": "node_store_leads",
       "name": "Code — Store Leads Data",
@@ -184,10 +166,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Build the Claude prompt from everything collected so far\nconst d = $input.item.json;\n\nconst execSample  = JSON.stringify(\n  d.exec_records.slice(0, 8).map(r => r.fields || r), null, 2\n);\nconst leadsSample = JSON.stringify(\n  d.lead_records.slice(0, 8).map(r => r.fields || r), null, 2\n);\n\nconst prompt = `You are an executive reporting assistant. Generate a concise daily KPI summary for ${d.readable_date}.\n\nWorkflow Execution Stats:\n- Executions in Airtable: ${d.exec_count}\n- Airtable data available: ${d.exec_fetch_ok}\n\nLead Pipeline:\n- New leads: ${d.new_leads}\n- Hot/qualified leads: ${d.hot_leads}\n- Leads data available: ${d.leads_fetch_ok}\n\nRecent Execution Records (sample):\n${execSample}\n\nRecent Lead Records (sample):\n${leadsSample}\n\nWrite a concise executive report with these plain-text sections:\n1. EXECUTIVE SUMMARY (2-3 sentences)\n2. WORKFLOW PERFORMANCE\n3. LEAD PIPELINE\n4. ALERTS & ISSUES\n5. TOMORROW'S RECOMMENDATIONS\n\nBe specific with numbers. No markdown # headers.`;\n\nreturn [{\n  json: {\n    ...d,\n    claude_prompt: prompt\n  }\n}];"
+        "jsCode": "const d = $input.item.json;\n\nconst execSample  = JSON.stringify(\n  d.exec_records.slice(0, 8).map(r => r.fields || r), null, 2\n);\nconst leadsSample = JSON.stringify(\n  d.lead_records.slice(0, 8).map(r => r.fields || r), null, 2\n);\n\nconst prompt = `You are an executive reporting assistant. Write a concise daily KPI summary for ${d.readable_date}.\n\nWorkflow Execution Stats:\n- Executions logged: ${d.exec_count}\n\nLead Pipeline:\n- Total leads in table: ${d.new_leads}\n- Hot/qualified leads: ${d.hot_leads}\n\nRecent Execution Records:\n${execSample}\n\nRecent Lead Records:\n${leadsSample}\n\nWrite a business report with these plain-text sections (no # markdown):\n1. EXECUTIVE SUMMARY\n2. WORKFLOW PERFORMANCE\n3. LEAD PIPELINE\n4. ALERTS AND ISSUES\n5. RECOMMENDATIONS FOR TOMORROW\n\nBe concise and specific with numbers.`;\n\nreturn [{\n  json: {\n    ...d,\n    groq_prompt: prompt\n  }\n}];"
       },
       "id": "node_build_prompt",
-      "name": "Code — Build Claude Prompt",
+      "name": "Code — Build Groq Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1480, 300]
@@ -195,38 +177,34 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.anthropic.com/v1/messages",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-api-key",
-              "value": "={{ $json.anthropic_key }}"
+              "name": "Authorization",
+              "value": "=Bearer {{ $json.groq_api_key }}"
             },
             {
-              "name": "anthropic-version",
-              "value": "2023-06-01"
-            },
-            {
-              "name": "content-type",
+              "name": "Content-Type",
               "value": "application/json"
             }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-3-5-haiku-20241022\",\n  \"max_tokens\": 1024,\n  \"messages\": [{ \"role\": \"user\", \"content\": {{ JSON.stringify($json.claude_prompt) }} }]\n}",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.4,\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an executive reporting assistant. Generate clear, concise daily KPI summaries in plain business language.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.groq_prompt) }}\n    }\n  ]\n}",
         "options": { "timeout": 60000 }
       },
-      "id": "node_claude",
-      "name": "Claude — Generate KPI Summary",
+      "id": "node_groq",
+      "name": "Groq — Generate KPI Summary",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [1680, 300]
     },
     {
       "parameters": {
-        "jsCode": "const claudeResp = $input.item.json;\nconst prev       = $('Code — Build Claude Prompt').item.json;\nconst summary    = claudeResp?.content?.[0]?.text ||\n                   claudeResp?.error?.message ||\n                   'AI summary not available — check ANTHROPIC_API_KEY.';\n\nconst d = prev;\n\nconst html = `<!DOCTYPE html>\n<html><head><meta charset=\"UTF-8\"></head>\n<body style=\"font-family:Arial,sans-serif;max-width:680px;margin:0 auto;padding:24px;background:#f8fafc\">\n  <div style=\"background:#1e40af;color:white;padding:20px 24px;border-radius:12px 12px 0 0\">\n    <h2 style=\"margin:0;font-size:22px\">&#x1F4CA; Daily KPI Report</h2>\n    <p style=\"margin:6px 0 0;opacity:0.85;font-size:14px\">${d.readable_date}</p>\n  </div>\n  <div style=\"background:white;padding:24px;border-radius:0 0 12px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.08)\">\n    <div style=\"background:#f0f9ff;border-left:4px solid #3b82f6;padding:16px;border-radius:4px;margin-bottom:20px\">\n      <h3 style=\"margin:0 0 10px;color:#1e40af\">&#x1F916; AI Executive Summary</h3>\n      <div style=\"white-space:pre-wrap;font-size:14px;line-height:1.7;color:#374151\">${summary}</div>\n    </div>\n    <h3 style=\"color:#374151;margin:0 0 12px\">&#x1F4CA; Quick Metrics</h3>\n    <table style=\"width:100%;border-collapse:collapse;font-size:14px\">\n      <tr style=\"background:#1e40af;color:white\">\n        <th style=\"padding:10px 14px;text-align:left\">Metric</th>\n        <th style=\"padding:10px 14px;text-align:right\">Value</th>\n      </tr>\n      <tr style=\"background:#f8fafc\"><td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb\">Executions logged</td><td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700\">${d.exec_count}</td></tr>\n      <tr><td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb\">New leads (all time in table)</td><td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#7c3aed\">${d.new_leads}</td></tr>\n      <tr style=\"background:#f8fafc\"><td style=\"padding:10px 14px\">Hot / qualified leads</td><td style=\"padding:10px 14px;text-align:right;font-weight:700;color:#dc2626\">${d.hot_leads}</td></tr>\n    </table>\n    <p style=\"font-size:11px;color:#9ca3af;margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb\">\n      Generated by Enterprise AI Workflow Automation &bull; ${d.timestamp}\n    </p>\n  </div>\n</body></html>`;\n\nreturn [{\n  json: {\n    summary,\n    html,\n    to_email:     d.to_email,\n    readable_date: d.readable_date,\n    yesterday_str: d.yesterday_str,\n    exec_count:   d.exec_count,\n    new_leads:    d.new_leads,\n    hot_leads:    d.hot_leads,\n    airtable_token:   d.airtable_token,\n    airtable_base_id: d.airtable_base_id\n  }\n}];"
+        "jsCode": "// Groq uses OpenAI-compatible format: choices[0].message.content\nconst groqResp = $input.item.json;\nconst prev     = $('Code — Build Groq Prompt').item.json;\n\nconst summary = groqResp?.choices?.[0]?.message?.content\n             || groqResp?.error?.message\n             || 'AI summary unavailable — check your Groq API key at console.groq.com';\n\nconst d = prev;\n\nconst html = `<!DOCTYPE html>\n<html><head><meta charset=\"UTF-8\"></head>\n<body style=\"font-family:Arial,sans-serif;max-width:680px;margin:0 auto;padding:24px;background:#f8fafc\">\n  <div style=\"background:#1e40af;color:white;padding:20px 24px;border-radius:12px 12px 0 0\">\n    <h2 style=\"margin:0;font-size:22px\">&#x1F4CA; Daily KPI Report</h2>\n    <p style=\"margin:6px 0 0;opacity:0.85;font-size:14px\">${d.readable_date}</p>\n  </div>\n  <div style=\"background:white;padding:24px;border-radius:0 0 12px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.08)\">\n    <div style=\"background:#f0f9ff;border-left:4px solid #3b82f6;padding:16px;border-radius:4px;margin-bottom:20px\">\n      <h3 style=\"margin:0 0 10px;color:#1e40af\">&#x1F916; AI Summary (Llama 3.3 70B via Groq)</h3>\n      <div style=\"white-space:pre-wrap;font-size:14px;line-height:1.7;color:#374151\">${summary}</div>\n    </div>\n    <h3 style=\"color:#374151;margin:0 0 12px\">&#x1F4CA; Quick Metrics</h3>\n    <table style=\"width:100%;border-collapse:collapse;font-size:14px\">\n      <tr style=\"background:#1e40af;color:white\">\n        <th style=\"padding:10px 14px;text-align:left\">Metric</th>\n        <th style=\"padding:10px 14px;text-align:right\">Value</th>\n      </tr>\n      <tr style=\"background:#f8fafc\">\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb\">Executions logged</td>\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700\">${d.exec_count}</td>\n      </tr>\n      <tr>\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb\">Leads in table</td>\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#7c3aed\">${d.new_leads}</td>\n      </tr>\n      <tr style=\"background:#f8fafc\">\n        <td style=\"padding:10px 14px\">Hot / qualified leads</td>\n        <td style=\"padding:10px 14px;text-align:right;font-weight:700;color:#dc2626\">${d.hot_leads}</td>\n      </tr>\n    </table>\n    <p style=\"font-size:11px;color:#9ca3af;margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb\">\n      Enterprise AI Workflow Automation &bull; Powered by Groq (free) + Llama 3.3 70B &bull; ${d.timestamp}\n    </p>\n  </div>\n</body></html>`;\n\nreturn [{\n  json: {\n    summary,\n    html,\n    to_email:         d.to_email,\n    readable_date:    d.readable_date,\n    yesterday_str:    d.yesterday_str,\n    exec_count:       d.exec_count,\n    new_leads:        d.new_leads,\n    hot_leads:        d.hot_leads,\n    airtable_token:   d.airtable_token,\n    airtable_base_id: d.airtable_base_id\n  }\n}];"
       },
       "id": "node_format",
       "name": "Code — Format Report",
@@ -306,27 +284,29 @@
       "main": [[{ "node": "Code — Store Leads Data", "type": "main", "index": 0 }]]
     },
     "Code — Store Leads Data": {
-      "main": [[{ "node": "Code — Build Claude Prompt", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Code — Build Groq Prompt", "type": "main", "index": 0 }]]
     },
-    "Code — Build Claude Prompt": {
-      "main": [[{ "node": "Claude — Generate KPI Summary", "type": "main", "index": 0 }]]
+    "Code — Build Groq Prompt": {
+      "main": [[{ "node": "Groq — Generate KPI Summary", "type": "main", "index": 0 }]]
     },
-    "Claude — Generate KPI Summary": {
+    "Groq — Generate KPI Summary": {
       "main": [[{ "node": "Code — Format Report", "type": "main", "index": 0 }]]
     },
     "Code — Format Report": {
       "main": [
         [
-          { "node": "Gmail — Send Report",        "type": "main", "index": 0 },
-          { "node": "Airtable — Log KPI Report",  "type": "main", "index": 0 }
+          { "node": "Gmail — Send Report",       "type": "main", "index": 0 },
+          { "node": "Airtable — Log KPI Report", "type": "main", "index": 0 }
         ]
       ]
     }
   },
   "active": false,
   "settings": { "executionOrder": "v1" },
-  "tags": ["reporting", "kpi", "ai", "scheduled", "gmail", "airtable"],
+  "tags": ["reporting", "kpi", "ai", "scheduled", "gmail", "airtable", "groq"],
   "meta": {
-    "description": "Free-plan compatible. No n8n Variables or Credentials needed except Gmail OAuth2. Fill in your values in the 'Config — Fill Your Values Here' Set node. Sequential flow — no parallel merge issues."
+    "description": "Free-plan compatible. Uses Groq (free) with Llama 3.3 70B instead of Claude. Sequential flow. Fill values in the Config Set node — no n8n Variables or paid features needed. Only credential: Gmail OAuth2.",
+    "ai_provider": "Groq - https://console.groq.com (free tier, no credit card)",
+    "model": "llama-3.3-70b-versatile"
   }
 }
