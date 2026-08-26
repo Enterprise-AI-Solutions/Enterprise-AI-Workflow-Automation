@@ -18,47 +18,118 @@
       "name": "Schedule — Every Day 08:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [100, 300]
+      "position": [80, 300]
     },
     {
       "parameters": {
-        "operation": "list",
-        "base": {
-          "__rl": true,
-          "value": "={{ $env.AIRTABLE_BASE_ID }}",
-          "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "Executions",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 100,
-        "filterByFormula": "AND(IS_AFTER({Created At}, DATEADD(TODAY(), -1, 'days')), IS_BEFORE({Created At}, TODAY()))",
-        "options": {
-          "sort": [{ "field": "Created At", "direction": "desc" }]
-        }
+        "jsCode": "// Build yesterday's date range for filter\nconst now = new Date();\nconst yesterday = new Date(now);\nyesterday.setDate(yesterday.getDate() - 1);\nyesterday.setHours(0, 0, 0, 0);\nconst today = new Date(now);\ntoday.setHours(0, 0, 0, 0);\n\nreturn [{\n  json: {\n    yesterday_str: yesterday.toISOString().split('T')[0],\n    today_str: today.toISOString().split('T')[0],\n    timestamp: now.toISOString(),\n    readable_date: now.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' })\n  }\n}];"
       },
-      "id": "node_airtable_executions",
-      "name": "Airtable — Fetch Yesterday Executions",
-      "type": "n8n-nodes-base.airtable",
+      "id": "node_set_dates",
+      "name": "Set — Build Date Range",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [340, 180],
-      "credentials": {
-        "airtableTokenApi": {
-          "id": "airtable_creds",
-          "name": "Airtable Personal Access Token"
-        }
-      }
+      "position": [280, 300]
     },
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.APP_BASE_URL }}/api/v1/executions/stats",
-        "authentication": "none",
+        "url": "=https://api.airtable.com/v0/{{ $env.AIRTABLE_BASE_ID }}/Executions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AIRTABLE_API_KEY }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filterByFormula",
+              "value": "=IS_AFTER({Created At}, '{{ $('Set — Build Date Range').item.json.yesterday_str }}')"
+            },
+            {
+              "name": "maxRecords",
+              "value": "100"
+            },
+            {
+              "name": "sort[0][field]",
+              "value": "Created At"
+            },
+            {
+              "name": "sort[0][direction]",
+              "value": "desc"
+            }
+          ]
+        },
         "options": {
-          "response": { "response": { "neverError": true } },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "node_airtable_executions",
+      "name": "Airtable — Fetch Yesterday Executions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [500, 160]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.airtable.com/v0/{{ $env.AIRTABLE_BASE_ID }}/Leads",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AIRTABLE_API_KEY }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filterByFormula",
+              "value": "=IS_AFTER({Created At}, '{{ $('Set — Build Date Range').item.json.yesterday_str }}')"
+            },
+            {
+              "name": "maxRecords",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "node_airtable_leads",
+      "name": "Airtable — Fetch Leads Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [500, 440]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_BASE_URL }}/api/v1/n8n/executions/stats",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          },
           "timeout": 10000
         }
       },
@@ -66,37 +137,17 @@
       "name": "API — Get Execution Stats",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [340, 340]
+      "position": [500, 300]
     },
     {
       "parameters": {
-        "operation": "list",
-        "base": {
-          "__rl": true,
-          "value": "={{ $env.AIRTABLE_BASE_ID }}",
-          "mode": "id"
-        },
-        "table": {
-          "__rl": true,
-          "value": "Leads",
-          "mode": "name"
-        },
-        "returnAll": false,
-        "limit": 50,
-        "filterByFormula": "IS_AFTER({Created At}, DATEADD(TODAY(), -1, 'days'))",
-        "options": {}
+        "jsCode": "// Gather data from all 3 parallel fetches\nconst dateInfo    = $('Set — Build Date Range').first().json;\nconst execData    = $('Airtable — Fetch Yesterday Executions').first().json;\nconst leadsData   = $('Airtable — Fetch Leads Data').first().json;\nconst statsData   = $('API — Get Execution Stats').first().json;\n\nconst execRecords  = execData?.records  || [];\nconst leadRecords  = leadsData?.records || [];\n\n// Stats from backend (or demo fallback)\nconst total        = statsData?.total             ?? execRecords.length;\nconst successRate  = statsData?.success_rate_pct  ?? statsData?.success_rate ?? 'N/A';\nconst avgDuration  = statsData?.avg_duration_seconds ?? 'N/A';\nconst byStatus     = statsData?.by_status         ?? {};\n\n// Count hot leads\nconst hotLeads = leadRecords.filter(r => {\n  const score = (r.fields?.Score || r.fields?.score || r.fields?.Status || '').toLowerCase();\n  return score.includes('hot') || score.includes('high');\n}).length;\n\nreturn [{\n  json: {\n    yesterday_str:  dateInfo.yesterday_str,\n    readable_date:  dateInfo.readable_date,\n    timestamp:      dateInfo.timestamp,\n    // Execution metrics\n    exec_count:     execRecords.length,\n    total_all_time: total,\n    success_rate:   successRate,\n    avg_duration:   avgDuration,\n    succeeded:      byStatus.success ?? 0,\n    failed:         byStatus.error   ?? 0,\n    running:        byStatus.running ?? 0,\n    // Lead metrics\n    new_leads:      leadRecords.length,\n    hot_leads:      hotLeads,\n    // Raw snippets for Claude\n    exec_sample:    JSON.stringify(execRecords.slice(0, 8).map(r => r.fields), null, 2),\n    leads_sample:   JSON.stringify(leadRecords.slice(0, 10).map(r => r.fields), null, 2)\n  }\n}];"
       },
-      "id": "node_airtable_leads",
-      "name": "Airtable — Fetch Leads Data",
-      "type": "n8n-nodes-base.airtable",
+      "id": "node_merge_data",
+      "name": "Code — Merge & Prepare Data",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [340, 500],
-      "credentials": {
-        "airtableTokenApi": {
-          "id": "airtable_creds",
-          "name": "Airtable Personal Access Token"
-        }
-      }
+      "position": [720, 300]
     },
     {
       "parameters": {
@@ -105,14 +156,14 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
-            { "name": "anthropic-version", "value": "2023-06-01" },
-            { "name": "content-type", "value": "application/json" }
+            { "name": "x-api-key",          "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version",   "value": "2023-06-01" },
+            { "name": "content-type",        "value": "application/json" }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-3-5-haiku-20241022\",\n  \"max_tokens\": 1024,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are an executive reporting assistant. Generate a concise daily KPI summary report.\\n\\n**Workflow Execution Stats (from backend):**\\n{{ JSON.stringify($('API — Get Execution Stats').item.json, null, 2) }}\\n\\n**Yesterday's Airtable Execution Records (sample):**\\n{{ JSON.stringify($('Airtable — Fetch Yesterday Executions').all().map(i => i.json.fields || i.json).slice(0, 10), null, 2) }}\\n\\n**New Leads (last 24h):**\\n{{ JSON.stringify($('Airtable — Fetch Leads Data').all().map(i => i.json.fields || i.json).slice(0, 20), null, 2) }}\\n\\n---\\nFormat the report with:\\n- Executive Summary (2-3 sentences)\\n- Workflow Performance (total runs, success rate, avg duration)\\n- Lead Pipeline (new leads, hot leads, conversion metrics)\\n- Alerts & Issues (if any failures)\\n- Tomorrow's Recommendations\\n\\nDate: {{ $now.format('dddd, MMMM Do YYYY') }}\"\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-3-5-haiku-20241022\",\n  \"max_tokens\": 1200,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are an executive reporting assistant. Generate a concise daily KPI summary for {{ $('Code — Merge & Prepare Data').item.json.readable_date }}.\\n\\n## Workflow Execution Metrics\\n- Logged yesterday: {{ $('Code — Merge & Prepare Data').item.json.exec_count }}\\n- Total all-time: {{ $('Code — Merge & Prepare Data').item.json.total_all_time }}\\n- Success rate: {{ $('Code — Merge & Prepare Data').item.json.success_rate }}%\\n- Avg duration: {{ $('Code — Merge & Prepare Data').item.json.avg_duration }}s\\n- Succeeded: {{ $('Code — Merge & Prepare Data').item.json.succeeded }} | Failed: {{ $('Code — Merge & Prepare Data').item.json.failed }}\\n\\n## Lead Pipeline (last 24h)\\n- New leads: {{ $('Code — Merge & Prepare Data').item.json.new_leads }}\\n- Hot leads: {{ $('Code — Merge & Prepare Data').item.json.hot_leads }}\\n\\n## Execution Records Sample\\n{{ $('Code — Merge & Prepare Data').item.json.exec_sample }}\\n\\n## New Leads Sample\\n{{ $('Code — Merge & Prepare Data').item.json.leads_sample }}\\n\\nWrite the report with these sections:\\n1. Executive Summary (2-3 sentences, highlight key wins or issues)\\n2. Workflow Performance (bullet points)\\n3. Lead Pipeline (bullet points)\\n4. Alerts & Issues (if any failures or anomalies)\\n5. Recommendations for Tomorrow\\n\\nBe concise and business-focused. No markdown headers with # symbols \u2014 use plain section labels.\"\n    }\n  ]\n}",
         "options": {
           "timeout": 60000
         }
@@ -121,72 +172,62 @@
       "name": "Claude — Generate KPI Summary",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [620, 340]
+      "position": [940, 300]
     },
     {
       "parameters": {
-        "jsCode": "// Extract the Claude response text\nconst claudeResponse = $('Claude — Generate KPI Summary').item.json;\nconst summary = claudeResponse?.content?.[0]?.text || claudeResponse?.summary || 'No summary generated';\n\n// Count stats from fetched data\nconst execItems = $('Airtable — Fetch Yesterday Executions').all();\nconst leadItems = $('Airtable — Fetch Leads Data').all();\nconst stats = $('API — Get Execution Stats').item.json;\n\nreturn [{\n  json: {\n    summary,\n    date: $now.format('YYYY-MM-DD'),\n    readable_date: $now.format('dddd, MMMM Do YYYY'),\n    exec_count: execItems.length,\n    new_leads: leadItems.length,\n    total_executions: stats?.total ?? 'N/A',\n    success_rate: stats?.success_rate ?? stats?.success_rate_pct ?? 'N/A',\n    avg_duration: stats?.avg_duration_seconds ?? 'N/A',\n    html_body: `<html><body style=\"font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:20px\">\n      <h2 style=\"color:#1e40af\">&#x1F4CA; Daily KPI Report \u2014 ${$now.format('MMMM Do, YYYY')}</h2>\n      <hr style=\"border:1px solid #e5e7eb\">\n      <div style=\"background:#f0f9ff;padding:16px;border-radius:8px;border-left:4px solid #3b82f6;margin-bottom:20px\">\n        <h3 style=\"margin:0 0 10px\">&#x1F916; AI Executive Summary</h3>\n        <pre style=\"white-space:pre-wrap;font-family:inherit;margin:0\">${summary}</pre>\n      </div>\n      <table style=\"width:100%;border-collapse:collapse;margin-bottom:20px\">\n        <tr style=\"background:#1e40af;color:white\">\n          <th style=\"padding:10px;text-align:left\">Metric</th>\n          <th style=\"padding:10px;text-align:right\">Value</th>\n        </tr>\n        <tr style=\"background:#f8fafc\">\n          <td style=\"padding:10px;border-bottom:1px solid #e5e7eb\">Total Executions (all time)</td>\n          <td style=\"padding:10px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:bold\">${stats?.total ?? 'N/A'}</td>\n        </tr>\n        <tr>\n          <td style=\"padding:10px;border-bottom:1px solid #e5e7eb\">Success Rate</td>\n          <td style=\"padding:10px;border-bottom:1px solid #e5e7eb;text-align:right;color:#16a34a;font-weight:bold\">${stats?.success_rate ?? stats?.success_rate_pct ?? 'N/A'}%</td>\n        </tr>\n        <tr style=\"background:#f8fafc\">\n          <td style=\"padding:10px;border-bottom:1px solid #e5e7eb\">Yesterday's Logged Executions</td>\n          <td style=\"padding:10px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:bold\">${execItems.length}</td>\n        </tr>\n        <tr>\n          <td style=\"padding:10px\">New Leads (last 24h)</td>\n          <td style=\"padding:10px;text-align:right;color:#7c3aed;font-weight:bold\">${leadItems.length}</td>\n        </tr>\n      </table>\n      <p style=\"font-size:12px;color:#6b7280\">Generated by Enterprise AI Workflow Automation &bull; ${$now.toISO()}</p>\n    </body></html>`\n  }\n}];"
+        "jsCode": "// Extract Claude's text response\nconst claudeResp  = $('Claude — Generate KPI Summary').item.json;\nconst summary     = claudeResp?.content?.[0]?.text || 'Summary generation failed — check Claude API key.';\nconst d           = $('Code — Merge & Prepare Data').item.json;\n\n// Build plain-text email body\nconst plain = `DAILY KPI REPORT — ${d.readable_date}\\n${'='.repeat(50)}\\n\\n${summary}\\n\\n${'─'.repeat(40)}\\nQuick Metrics\\n${'─'.repeat(40)}\\nNew executions logged : ${d.exec_count}\\nTotal all-time        : ${d.total_all_time}\\nSuccess rate          : ${d.success_rate}%\\nAvg duration          : ${d.avg_duration}s\\nNew leads (24h)       : ${d.new_leads}\\nHot leads             : ${d.hot_leads}\\n\\nGenerated automatically by Enterprise AI Workflow Automation`;\n\n// Build HTML email\nconst html = `<!DOCTYPE html>\n<html>\n<head><meta charset=\"UTF-8\"></head>\n<body style=\"font-family:Arial,sans-serif;max-width:680px;margin:0 auto;padding:24px;background:#f8fafc\">\n  <div style=\"background:#1e40af;color:white;padding:20px 24px;border-radius:12px 12px 0 0\">\n    <h2 style=\"margin:0;font-size:22px\">&#x1F4CA; Daily KPI Report</h2>\n    <p style=\"margin:6px 0 0;opacity:0.85;font-size:14px\">${d.readable_date}</p>\n  </div>\n  <div style=\"background:white;padding:24px;border-radius:0 0 12px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.08)\">\n    <div style=\"background:#f0f9ff;border-left:4px solid #3b82f6;padding:16px;border-radius:4px;margin-bottom:20px\">\n      <h3 style=\"margin:0 0 10px;color:#1e40af\">&#x1F916; AI Executive Summary</h3>\n      <div style=\"white-space:pre-wrap;font-size:14px;line-height:1.6;color:#374151\">${summary}</div>\n    </div>\n    <h3 style=\"color:#374151;margin:0 0 12px\">&#x1F4CA; Key Metrics</h3>\n    <table style=\"width:100%;border-collapse:collapse;font-size:14px\">\n      <tr style=\"background:#1e40af;color:white\">\n        <th style=\"padding:10px 14px;text-align:left\">Metric</th>\n        <th style=\"padding:10px 14px;text-align:right\">Value</th>\n      </tr>\n      <tr style=\"background:#f8fafc\">\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb\">Executions logged (yesterday)</td>\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700\">${d.exec_count}</td>\n      </tr>\n      <tr>\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb\">All-time executions</td>\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700\">${d.total_all_time}</td>\n      </tr>\n      <tr style=\"background:#f8fafc\">\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb\">Success rate</td>\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#16a34a\">${d.success_rate}%</td>\n      </tr>\n      <tr>\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb\">Avg execution duration</td>\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700\">${d.avg_duration}s</td>\n      </tr>\n      <tr style=\"background:#f8fafc\">\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb\">New leads (last 24h)</td>\n        <td style=\"padding:10px 14px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:700;color:#7c3aed\">${d.new_leads}</td>\n      </tr>\n      <tr>\n        <td style=\"padding:10px 14px\">Hot leads</td>\n        <td style=\"padding:10px 14px;text-align:right;font-weight:700;color:#dc2626\">${d.hot_leads}</td>\n      </tr>\n    </table>\n    <p style=\"font-size:11px;color:#9ca3af;margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb\">\n      Generated automatically &bull; Enterprise AI Workflow Automation &bull; ${d.timestamp}\n    </p>\n  </div>\n</body>\n</html>`;\n\nreturn [{ json: { summary, plain, html, date: d.yesterday_str, readable_date: d.readable_date, exec_count: d.exec_count, new_leads: d.new_leads, success_rate: d.success_rate, hot_leads: d.hot_leads } }];"
       },
       "id": "node_format_report",
-      "name": "Format — Build Report Data",
+      "name": "Code — Format Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [860, 340]
+      "position": [1160, 300]
     },
     {
       "parameters": {
-        "operation": "append",
-        "documentId": {
-          "__rl": true,
-          "value": "={{ $env.KPI_SHEET_ID }}",
-          "mode": "id"
+        "method": "POST",
+        "url": "=https://api.airtable.com/v0/{{ $env.AIRTABLE_BASE_ID }}/KPI_Reports",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AIRTABLE_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
         },
-        "sheetName": {
-          "__rl": true,
-          "value": "KPI_Log",
-          "mode": "name"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "Date":          "={{ $('Format — Build Report Data').item.json.date }}",
-            "Readable Date": "={{ $('Format — Build Report Data').item.json.readable_date }}",
-            "Executions":    "={{ $('Format — Build Report Data').item.json.exec_count }}",
-            "New Leads":     "={{ $('Format — Build Report Data').item.json.new_leads }}",
-            "Success Rate":  "={{ $('Format — Build Report Data').item.json.success_rate }}",
-            "Summary":       "={{ $('Format — Build Report Data').item.json.summary }}"
-          }
-        },
-        "options": {}
-      },
-      "id": "node_sheets_log",
-      "name": "Google Sheets — Log KPI Entry",
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4,
-      "position": [1100, 220],
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "google_sheets_creds",
-          "name": "Google Sheets OAuth2"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"records\": [\n    {\n      \"fields\": {\n        \"Date\": \"{{ $('Code — Format Report').item.json.date }}\",\n        \"Readable Date\": \"{{ $('Code — Format Report').item.json.readable_date }}\",\n        \"Executions\": {{ $('Code — Format Report').item.json.exec_count }},\n        \"New Leads\": {{ $('Code — Format Report').item.json.new_leads }},\n        \"Success Rate\": \"{{ $('Code — Format Report').item.json.success_rate }}%\",\n        \"Hot Leads\": {{ $('Code — Format Report').item.json.hot_leads }},\n        \"AI Summary\": {{ JSON.stringify($('Code — Format Report').item.json.summary) }}\n      }\n    }\n  ]\n}",
+        "options": {
+          "response": { "response": { "neverError": true } },
+          "timeout": 15000
         }
-      }
+      },
+      "id": "node_airtable_log",
+      "name": "Airtable — Log KPI Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1380, 180]
     },
     {
       "parameters": {
         "sendTo": "={{ $env.STAKEHOLDER_EMAILS }}",
-        "subject": "=\ud83d\udcca Daily KPI Report \u2014 {{ $('Format — Build Report Data').item.json.readable_date }}",
+        "subject": "=\ud83d\udcca Daily KPI Report \u2014 {{ $('Code — Format Report').item.json.readable_date }}",
         "emailType": "html",
-        "message": "={{ $('Format — Build Report Data').item.json.html_body }}",
-        "options": {
-          "replyTo": "",
-          "appendAttribution": false
-        }
+        "message": "={{ $('Code — Format Report').item.json.html }}",
+        "options": {}
       },
       "id": "node_gmail_report",
       "name": "Gmail — Email Report to Stakeholders",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [1100, 440],
+      "position": [1380, 420],
       "credentials": {
         "gmailOAuth2": {
           "id": "gmail_creds",
@@ -197,6 +238,9 @@
   ],
   "connections": {
     "Schedule — Every Day 08:00": {
+      "main": [[{ "node": "Set — Build Date Range", "type": "main", "index": 0 }]]
+    },
+    "Set — Build Date Range": {
       "main": [
         [
           { "node": "Airtable — Fetch Yesterday Executions", "type": "main", "index": 0 },
@@ -206,44 +250,44 @@
       ]
     },
     "Airtable — Fetch Yesterday Executions": {
-      "main": [[{ "node": "Claude — Generate KPI Summary", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Code — Merge & Prepare Data", "type": "main", "index": 0 }]]
     },
     "API — Get Execution Stats": {
-      "main": [[{ "node": "Claude — Generate KPI Summary", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Code — Merge & Prepare Data", "type": "main", "index": 0 }]]
     },
     "Airtable — Fetch Leads Data": {
+      "main": [[{ "node": "Code — Merge & Prepare Data", "type": "main", "index": 0 }]]
+    },
+    "Code — Merge & Prepare Data": {
       "main": [[{ "node": "Claude — Generate KPI Summary", "type": "main", "index": 0 }]]
     },
     "Claude — Generate KPI Summary": {
-      "main": [[{ "node": "Format — Build Report Data", "type": "main", "index": 0 }]]
+      "main": [[{ "node": "Code — Format Report", "type": "main", "index": 0 }]]
     },
-    "Format — Build Report Data": {
+    "Code — Format Report": {
       "main": [
         [
-          { "node": "Google Sheets — Log KPI Entry",          "type": "main", "index": 0 },
-          { "node": "Gmail — Email Report to Stakeholders",   "type": "main", "index": 0 }
+          { "node": "Airtable — Log KPI Report",            "type": "main", "index": 0 },
+          { "node": "Gmail — Email Report to Stakeholders", "type": "main", "index": 0 }
         ]
       ]
     }
   },
   "active": true,
   "settings": { "executionOrder": "v1" },
-  "tags": ["reporting", "kpi", "ai", "scheduled", "gmail", "sheets", "airtable"],
+  "tags": ["reporting", "kpi", "ai", "scheduled", "gmail", "airtable"],
   "meta": {
-    "description": "Runs daily at 08:00. Fetches Airtable execution logs + lead pipeline, calls Claude AI directly for an executive summary, logs to Google Sheets, and emails stakeholders. Uses native n8n nodes \u2014 no backend dependency.",
+    "description": "Runs daily at 08:00. Uses only HTTP Request + Code + Gmail nodes — no native Airtable node to avoid typeVersion import issues. All Airtable calls use the REST API directly via AIRTABLE_API_KEY.",
     "setup": {
-      "required_credentials": [
-        "Airtable Personal Access Token (n8n credential: airtableTokenApi)",
-        "Gmail OAuth2 (n8n credential: gmailOAuth2)",
-        "Google Sheets OAuth2 (n8n credential: googleSheetsOAuth2Api)"
-      ],
-      "required_env_vars": {
-        "ANTHROPIC_API_KEY": "Your Claude/Anthropic API key",
-        "AIRTABLE_BASE_ID": "Your Airtable base ID (appXXXXXXXXXXXXXX)",
-        "KPI_SHEET_ID": "Google Sheets spreadsheet ID",
-        "STAKEHOLDER_EMAILS": "Comma-separated email addresses for the daily report",
-        "APP_BASE_URL": "Your deployed backend URL (e.g. https://your-app.railway.app) or leave empty to skip stats"
-      }
+      "n8n_credentials_needed": ["Gmail OAuth2 (for the Gmail send node)"],
+      "n8n_variables_needed": {
+        "AIRTABLE_API_KEY":    "Your Airtable Personal Access Token (starts with pat...)",
+        "AIRTABLE_BASE_ID":    "Your Airtable base ID (starts with app...)",
+        "ANTHROPIC_API_KEY":   "Your Claude API key",
+        "STAKEHOLDER_EMAILS":  "Email address(es) for the daily report",
+        "APP_BASE_URL":        "Your deployed backend URL, or leave blank to skip stats"
+      },
+      "airtable_tables_needed": ["Executions", "Leads", "KPI_Reports"]
     }
   }
 }
