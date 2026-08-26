@@ -153,7 +153,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$env.APP_BASE_URL }}/api/v1/ai/chat",
+        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/chat",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -174,7 +174,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$env.APP_BASE_URL }}/api/v1/google/gmail/send",
+        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/google/gmail/send",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -207,7 +207,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$env.APP_BASE_URL }}/api/v1/airtable/bases/{{ $env.AIRTABLE_BASE_ID }}/tables/SAP_Maintenance_Alerts/records",
+        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/airtable/bases/{{ $vars.AIRTABLE_BASE_ID }}/tables/SAP_Maintenance_Alerts/records",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [

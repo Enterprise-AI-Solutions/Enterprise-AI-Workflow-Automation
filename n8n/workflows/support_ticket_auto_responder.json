@@ -17,7 +17,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$env.APP_BASE_URL }}/api/v1/ai/classify",
+        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/classify",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -42,7 +42,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$env.APP_BASE_URL }}/api/v1/ai/chat",
+        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/ai/chat",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -81,7 +81,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$env.APP_BASE_URL }}/api/v1/airtable/bases/{{ $env.AIRTABLE_BASE_ID }}/tables/Support Tickets/records",
+        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/airtable/bases/{{ $vars.AIRTABLE_BASE_ID }}/tables/Support Tickets/records",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -110,7 +110,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$env.APP_BASE_URL }}/api/v1/google/gmail/send",
+        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/google/gmail/send",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -139,13 +139,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ \$env.APP_BASE_URL }}/api/v1/google/gmail/send",
+        "url": "={{ \$vars.APP_BASE_URL }}/api/v1/google/gmail/send",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
             {
               "name": "to",
-              "value": "={{ $env.SUPPORT_ESCALATION_EMAIL }}"
+              "value": "={{ $vars.SUPPORT_ESCALATION_EMAIL }}"
             },
             {
               "name": "subject",
